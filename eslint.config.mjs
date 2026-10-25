@@ -4,5 +4,6 @@ import mridangPlugin from '@mridang/eslint-defaults';
 
 export default [
   includeIgnoreFile(fileURLToPath(new URL('.gitignore', import.meta.url))),
+  { ignores: ['test/contract/fixtures/**'] },
   ...mridangPlugin.configs.recommended,
 ];

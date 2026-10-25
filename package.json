@@ -15,6 +15,12 @@
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "keywords": [
     "vite",
     "vite-plugin",
@@ -41,10 +47,57 @@
   },
   "homepage": "https://github.com/mridang/vite-plugin-nuxt-module",
   "bugs": "https://github.com/mridang/vite-plugin-nuxt-module/issues",
+  "dependencies": {
+    "picomatch": "^4.0.4",
+    "rolldown": "^1.2.12",
+    "rolldown-plugin-dts": "^0.28.6"
+  },
+  "peerDependencies": {
+    "@nuxt/kit": ">=3",
+    "@nuxt/schema": ">=3",
+    "nuxt": ">=3",
+    "sass": ">=1",
+    "sass-embedded": ">=1",
+    "typescript": ">=5",
+    "vite": ">=8",
+    "vue-sfc-transformer": ">=0.1",
+    "vue-tsc": ">=2"
+  },
+  "peerDependenciesMeta": {
+    "@nuxt/kit": {
+      "optional": true
+    },
+    "@nuxt/schema": {
+      "optional": true
+    },
+    "nuxt": {
+      "optional": true
+    },
+    "sass": {
+      "optional": true
+    },
+    "sass-embedded": {
+      "optional": true
+    },
+    "typescript": {
+      "optional": true
+    },
+    "vue-sfc-transformer": {
+      "optional": true
+    },
+    "vue-tsc": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@babel/core": "^7.29.7",
     "@eslint/compat": "^2.1.0",
     "@jest/globals": "^30.0.3",
     "@mridang/eslint-defaults": "^1.6.3",
+    "@nuxt/kit": "^4.5.1",
+    "@nuxt/schema": "^4.5.1",
+    "@nuxt/test-utils": "^4.3.4",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^12.0.0",
@@ -53,14 +106,24 @@
     "@tsconfig/node22": "^22.0.2",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.18.12",
+    "@types/picomatch": "^4.0.2",
     "eslint": "^9.39.4",
+    "h3": "^1.15.3",
     "jest": "^30.0.3",
     "jest-junit": "^16.0.0",
     "knip": "^6.17.1",
+    "nuxt": "^4.5.1",
     "prettier": "^3.1.1",
+    "publint": "^0.3.25",
+    "sass": "^1.106.1",
     "semantic-release": "^25.0.1",
     "ts-jest": "^29.4.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^8.3.1",
+    "vue": "^3.5.42",
+    "vue-router": "^5.2.0",
+    "vue-sfc-transformer": "^0.3.1",
+    "vue-tsc": "^3.2.8"
   },
   "publishConfig": {
     "access": "public"

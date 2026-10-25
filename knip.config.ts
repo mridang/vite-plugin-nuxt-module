@@ -1,4 +1,9 @@
 export default {
-  ignore: ['knip.config.ts'],
-  ignoreDependencies: [/^@semantic-release\//],
+  ignore: ['test/contract/fixtures/**'],
+  ignoreDependencies: [
+    /^@semantic-release\//,
+    '@arethetypeswrong/cli',
+    'vue-router',
+    'vue-sfc-transformer',
+  ],
 };
