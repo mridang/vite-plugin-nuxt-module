@@ -1,3 +1,12 @@
+/**
+ * The proof that what the plugin writes is a working Nuxt module. It builds a fixture module
+ * (`test/contract/fixtures/module`) with the plugin, packs it with `npm pack`, installs the tarball into a
+ * copy of a fixture Nuxt app, builds that app with `nuxi build` and starts it with
+ * `@nuxt/test-utils/e2e` (on its Jest runner). It asserts what each `@nuxt/kit` API the module uses does in
+ * the running app, type-checks a consumer file against the generated types, and runs `publint` and `attw`
+ * on the package. `test/kit-coverage.test.ts` lists every export of `@nuxt/kit` and requires each to be
+ * covered by the fixture or excluded with a reason, so a new kit function forces a decision.
+ */
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { $fetch, fetch, setup } from '@nuxt/test-utils/e2e';

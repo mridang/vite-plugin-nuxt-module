@@ -3,6 +3,14 @@
 A Vite plugin that builds a [Nuxt module](https://nuxt.com/docs/guide/going-further/modules) the
 way `nuxt-module-build build` (`@nuxt/module-builder`) does, from the module's own Vite config.
 
+### Why?
+
+Nuxt's own `nuxt-module-build` (`@nuxt/module-builder`) builds a module with `unbuild`. When the rest of
+a project already builds with Vite, the module becomes the one package with a different toolchain, a
+different config file and a different plugin set. This plugin builds the module from the same Vite
+config as everything else, and writes the files module-builder does: the bundled module, the
+`runtime/` folder transpiled file by file, `module.json` and `types.d.mts`.
+
 ## Installation
 
 Install using NPM with the following command:
@@ -163,27 +171,6 @@ Steps 6 and 7 run in `closeBundle`, in plugin order, and only when the build suc
 | `src/declarations/`                                                     | Bundling the declarations, and checking the sources and the written declarations |
 | `src/outputs.ts`                                                        | The steps after the bundle                                                       |
 | `src/resolve.ts`                                                        | Loading tools (TypeScript, Sass, `vue-tsc`) from the module being built          |
-
-## Development
-
-```sh
-npm run build            # tsc
-npm run lint
-npm run format:check
-npm test                 # unit tests and the contract spec
-```
-
-Unit tests mirror their source (`src/externals.ts` has `test/externals.test.ts`); packages that build
-end to end come from `test/utils/fixture.ts`.
-
-The contract spec (`test/contract/contract.test.ts`) is the proof that what the plugin writes is a
-working Nuxt module. It builds a fixture module (`test/contract/fixtures/module`) with the plugin,
-packs it with `npm pack`, installs the tarball into a copy of a fixture Nuxt app, builds that app with
-`nuxi build` and starts it with `@nuxt/test-utils/e2e` (on its Jest runner). It asserts what each
-`@nuxt/kit` API the module uses does in the running app, type-checks a consumer file against the
-generated types, and runs `publint` and `attw` on the package. `test/kit-coverage.test.ts` lists every
-export of `@nuxt/kit` and requires each to be covered by the fixture or excluded with a reason, so a new
-kit function forces a decision.
 
 ## Contributing
 
