@@ -120,6 +120,7 @@ export function failOnLoggedWarnings(outcome: BuildOutcome): {
 } {
   // `customLogger` replaces Vite's own logger and with it `logLevel`: the level is read in `config`.
   let base = createLogger();
+  let resolved: ResolvedConfig | undefined;
   const warnings: string[] = [];
   const record = (message: string): void => {
     warnings.push(stripVTControlCharacters(message).trim());
@@ -171,9 +172,40 @@ export function failOnLoggedWarnings(outcome: BuildOutcome): {
       if (error) failed();
     },
     renderError: failed,
-    closeBundle: { order: 'pre', handler: check },
+    configResolved(config) {
+      resolved = config;
+    },
+    closeBundle: {
+      order: 'pre',
+      handler() {
+        if (!resolved?.build.watch) return check();
+        return closeStep(resolved, WARNINGS_PLUGIN, check);
+      },
+    },
   };
   return { customLogger, plugin };
+}
+
+/**
+ * Runs `step`, a `closeBundle` handler, so that a failure fails one build only. Vite's watcher
+ * closes each bundle without waiting for it: a rejection there is unhandled and ends `--watch`.
+ * Under `--watch` the failure is logged as that rebuild's error instead; a one-shot build still
+ * rejects, so `vite build` exits non-zero.
+ */
+async function closeStep(
+  config: Pick<ResolvedConfig, 'build' | 'logger'>,
+  name: string,
+  step: () => unknown,
+): Promise<void> {
+  try {
+    await step();
+  } catch (error) {
+    if (!config.build.watch) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    config.logger.error(`[${name}] ${message}`, {
+      error: error instanceof Error ? error : undefined,
+    });
+  }
 }
 
 /** A plugin that reads its build's {@link BuildOutcome} once the bundle is closed and hands it to `run`. */
@@ -195,6 +227,9 @@ function onClose(
   let outcome: BuildOutcome = { failed: false };
   // Without a warnings plugin, this step keeps the outcome itself, and starts it over every build.
   let own = true;
+  // Builds started so far, and the last run of the step: see `closeBundle`.
+  let builds = 0;
+  let previous: Promise<void> = Promise.resolve();
   return {
     ...options,
     name,
@@ -209,6 +244,7 @@ function onClose(
     buildStart: {
       order: 'pre',
       handler() {
+        builds += 1;
         if (own) outcome.failed = false;
       },
     },
@@ -218,8 +254,26 @@ function onClose(
     renderError() {
       outcome.failed = true;
     },
-    async closeBundle() {
-      if (config) await run(config, outcome.failed);
+    closeBundle() {
+      const resolved = config;
+      if (!resolved) return;
+      // Under `--watch` the next rebuild can start before this step ends (Vite does not wait for
+      // it): the outcome is read now, the runs go one at a time, and a failure is recorded only
+      // while no later build has started.
+      const failed = outcome.failed;
+      const build = builds;
+      const step = async (): Promise<void> => {
+        try {
+          await run(resolved, failed);
+        } catch (error) {
+          // A failed step fails the build: the steps after it are skipped.
+          if (build === builds) outcome.failed = true;
+          throw error;
+        }
+      };
+      const done = previous.then(() => closeStep(resolved, name, step));
+      previous = done.catch(() => {});
+      return done;
     },
   };
 }

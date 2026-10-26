@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
@@ -81,6 +81,18 @@ describe('emitBundledTypes', () => {
       'src/index.ts': 'export const x: number = "s";\n',
     });
     await expect(emit(root)).rejects.toThrow(/1 type error\(s\)[\s\S]*TS2322/);
+  }, 60_000);
+
+  it('declares the sources as they are now when it runs again in the same process', async () => {
+    const root = fixture({
+      'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
+      'tsconfig.json': FIXTURE_TSCONFIG,
+      'src/index.ts': 'export const before = 1;\n',
+    });
+    await emit(root);
+    writeFileSync(join(root, 'src/index.ts'), 'export const after = 1;\n');
+    await emit(root);
+    expect(output(root, 'dist/index.d.mts')).toContain('after');
   }, 60_000);
 
   it('fails when the written declarations do not type-check (a namespace the bundler never declares)', async () => {
