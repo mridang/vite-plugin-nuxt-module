@@ -1,4 +1,5 @@
 import {
+  appendFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -6,9 +7,16 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { setTimeout } from 'node:timers/promises';
+import { createLogger, type Logger } from 'vite';
 import { describe, expect, it } from '@jest/globals';
 
-import { buildFixture, fixture, withTools } from './utils/fixture.js';
+import {
+  buildFixture,
+  fixture,
+  watchFixture,
+  withTools,
+} from './utils/fixture.js';
 import {
   hoistedTypePaths,
   moduleDeclarationOptions,
@@ -97,6 +105,21 @@ function pnpmStarterModule(): string {
 
 async function buildModule(root: string): Promise<void> {
   await buildFixture(root, { runtimeDir: false });
+}
+
+/** Waits until `done()` holds, or fails after `ms`. */
+async function until(done: () => boolean, ms = 45_000): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (!done()) {
+    if (Date.now() > deadline) throw new Error('timed out');
+    await setTimeout(100);
+  }
+}
+
+/** A silent logger that keeps the errors logged to it. */
+function errorLogger(errors: string[]): Logger {
+  const logger = createLogger('silent');
+  return { ...logger, error: (message) => void errors.push(message) };
 }
 
 describe('hoistedTypePaths', () => {
@@ -251,6 +274,35 @@ describe('nuxtModuleOutputs', () => {
       'import("@nuxt/schema").NuxtModule',
     );
   }, 60_000);
+
+  it('reports a type error under --watch and rebuilds once it is fixed', async () => {
+    const root = tree(starterModule);
+    const errors: string[] = [];
+    const module = join(root, 'src/module.ts');
+    const declaration = join(root, 'dist/module.d.mts');
+    const watcher = await watchFixture(
+      root,
+      { runtimeDir: false },
+      { customLogger: errorLogger(errors) },
+    );
+    try {
+      await until(() => existsSync(declaration));
+      appendFileSync(module, 'export const broken: number = "nan";\n');
+      await until(() => errors.length > 0);
+      writeFileSync(
+        module,
+        `${starterModule['src/module.ts']}export const fixed = 1;\n`,
+      );
+      await until(
+        () =>
+          existsSync(declaration) &&
+          readFileSync(declaration, 'utf8').includes('fixed'),
+      );
+    } finally {
+      await watcher.close();
+    }
+    expect(errors.join('\n')).toContain('TS2322');
+  }, 120_000);
 
   it('writes no source maps by default', async () => {
     const root = tree(starterModule);

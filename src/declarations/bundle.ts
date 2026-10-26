@@ -179,6 +179,9 @@ export async function emitBundledTypes(
         sourcemap,
         compilerOptions: { ...CONSUMER_COMPILER_OPTIONS, ...compilerOptions },
         ...(o.eager ? { eager: true } : {}),
+        // The shared context keeps every source it read until a `watchChange` this one-shot
+        // build never sees: under `--watch` each rebuild would declare the first build's sources.
+        newContext: true,
       }),
     ],
     onLog: failOnDeclarationWarnings(o.allowWarnings ?? []),

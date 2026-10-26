@@ -9,6 +9,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { RolldownWatcher } from 'rolldown';
 import { build, type UserConfig } from 'vite';
 
 import './realm.js';
@@ -80,6 +81,25 @@ export async function buildFixture(
     configFile: false,
     logLevel: 'silent',
   });
+}
+
+/**
+ * Starts `vite build --watch` of the package at `root` with the plugin, like {@link buildFixture}.
+ * The caller closes the watcher.
+ */
+export async function watchFixture(
+  root: string,
+  options: NuxtModuleOptions = {},
+  vite: UserConfig = {},
+): Promise<RolldownWatcher> {
+  return (await build({
+    root,
+    ...vite,
+    build: { ...vite.build, watch: {} },
+    plugins: [nuxtModule(options), ...(vite.plugins ?? [])],
+    configFile: false,
+    logLevel: 'silent',
+  })) as RolldownWatcher;
 }
 
 /** A file of a fixture's build output, as text. */

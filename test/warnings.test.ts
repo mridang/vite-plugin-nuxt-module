@@ -161,6 +161,19 @@ describe('failOnLoggedWarnings', () => {
     expect(() => call(plugin.buildStart)).not.toThrow();
   });
 
+  it('logs a warning logged during a rebuild under --watch instead of throwing', async () => {
+    const error = jest.fn();
+    const { customLogger, plugin } = failOnLoggedWarnings({ failed: false });
+    call(plugin.config, { logLevel: 'silent' });
+    call(plugin.configResolved, { build: { watch: {} }, logger: { error } });
+    customLogger.warn('chunk is large');
+    await call(plugin.closeBundle);
+    expect(error).toHaveBeenCalledWith(
+      `[${WARNINGS_PLUGIN}] Vite warned:\nchunk is large`,
+      expect.anything(),
+    );
+  });
+
   it('passes a build that logged no warning', () => {
     const { customLogger, plugin } = failOnLoggedWarnings({ failed: false });
     call(plugin.config, { logLevel: 'silent' });
@@ -202,6 +215,46 @@ describe('afterBuild', () => {
     call(plugin.buildEnd);
     await call(plugin.closeBundle);
     expect(step).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects with a failing step in a one-shot build', async () => {
+    const plugin = afterBuild('x', () => {
+      throw new Error('TS2322');
+    });
+    call(plugin.configResolved, { build: {}, plugins: [] });
+    await expect(call(plugin.closeBundle)).rejects.toThrow('TS2322');
+  });
+
+  it("logs a failing step's error under --watch instead of rejecting", async () => {
+    const error = jest.fn();
+    const plugin = afterBuild('x', () => {
+      throw new Error('TS2322');
+    });
+    call(plugin.configResolved, {
+      build: { watch: {} },
+      logger: { error },
+      plugins: [],
+    });
+    await call(plugin.closeBundle);
+    expect(error).toHaveBeenCalledWith('[x] TS2322', expect.anything());
+  });
+
+  it('skips the steps after a step that failed', async () => {
+    const outcome = { failed: false };
+    const step = jest.fn();
+    const first = afterBuild('first', () => {
+      throw new Error('x');
+    });
+    const second = afterBuild('second', step);
+    for (const plugin of [first, second])
+      call(plugin.configResolved, {
+        build: { watch: {} },
+        logger: { error: () => {} },
+        plugins: [{ name: WARNINGS_PLUGIN, api: { outcome } }],
+      });
+    await call(first.closeBundle);
+    await call(second.closeBundle);
+    expect(step).not.toHaveBeenCalled();
   });
 
   it.each([
