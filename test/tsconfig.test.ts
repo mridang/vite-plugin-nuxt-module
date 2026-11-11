@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import nodePath from 'node:path';
 import { describe, expect, it } from '@jest/globals';
@@ -14,8 +14,8 @@ import {
 const { join } = nodePath;
 
 describe('parsedTsconfig', () => {
-  it('applies the extends chain, with overrides on top', () => {
-    const root = fixture({
+  it('applies the extends chain, with overrides on top', async () => {
+    const root = await fixture({
       'package.json': '{}',
       'base.json': JSON.stringify({
         compilerOptions: { strict: true, jsx: 'preserve' },
@@ -36,8 +36,8 @@ describe('parsedTsconfig', () => {
     ]);
   });
 
-  it('fails on a tsconfig it cannot read, naming it', () => {
-    const root = fixture({ 'package.json': '{}' });
+  it('fails on a tsconfig it cannot read, naming it', async () => {
+    const root = await fixture({ 'package.json': '{}' });
     const tsconfig = join(root, 'missing.json');
     expect(() => parsedTsconfig(packageTypeScript(root), tsconfig)).toThrow(
       `cannot read ${tsconfig}`,
@@ -46,8 +46,8 @@ describe('parsedTsconfig', () => {
 });
 
 describe('absolutePaths', () => {
-  it('resolves inherited paths against the tsconfig that declares them, and own ones against baseUrl', () => {
-    const root = fixture({
+  it('resolves inherited paths against the tsconfig that declares them, and own ones against baseUrl', async () => {
+    const root = await fixture({
       'package.json': '{}',
       'config/base.json': JSON.stringify({
         compilerOptions: { paths: { 'a/*': ['../a/*'] } },
@@ -75,32 +75,31 @@ describe('absolutePaths', () => {
 });
 
 describe('packageTsconfig', () => {
-  const tree = (files: Record<string, string>): string => {
-    // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-    const dir = realpathSync(
-      // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-      mkdtempSync(join(tmpdir(), 'nuxt-module-tsconfig-')),
+  const tree = async (files: Record<string, string>): Promise<string> => {
+    const dir = await realpath(
+      await mkdtemp(join(tmpdir(), 'nuxt-module-tsconfig-')),
     );
     for (const [name, text] of Object.entries(files)) {
-      // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-      mkdirSync(join(dir, name, '..'), { recursive: true });
-      // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-      writeFileSync(join(dir, name), text);
+      await mkdir(join(dir, name, '..'), { recursive: true });
+      await writeFile(join(dir, name), text);
     }
     return dir;
   };
 
-  it('prefers tsconfig.lib.json, then tsconfig.json', () => {
-    const withLib = tree({ 'tsconfig.json': '{}', 'tsconfig.lib.json': '{}' });
-    const without = tree({ 'tsconfig.json': '{}' });
+  it('prefers tsconfig.lib.json, then tsconfig.json', async () => {
+    const withLib = await tree({
+      'tsconfig.json': '{}',
+      'tsconfig.lib.json': '{}',
+    });
+    const without = await tree({ 'tsconfig.json': '{}' });
     expect([packageTsconfig(withLib), packageTsconfig(without)]).toEqual([
       join(withLib, 'tsconfig.lib.json'),
       join(without, 'tsconfig.json'),
     ]);
   });
 
-  it('falls back to the nearest tsconfig.json above a monorepo package', () => {
-    const root = tree({
+  it('falls back to the nearest tsconfig.json above a monorepo package', async () => {
+    const root = await tree({
       'tsconfig.json': '{}',
       'packages/x/package.json': '{}',
     });
@@ -109,8 +108,8 @@ describe('packageTsconfig', () => {
     );
   });
 
-  it('takes a named tsconfig as it is, without looking further', () => {
-    const root = tree({ 'tsconfig.json': '{}' });
+  it('takes a named tsconfig as it is, without looking further', async () => {
+    const root = await tree({ 'tsconfig.json': '{}' });
     expect(packageTsconfig(root, 'tsconfig.build.json')).toBe(
       join(root, 'tsconfig.build.json'),
     );

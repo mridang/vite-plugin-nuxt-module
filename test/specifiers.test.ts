@@ -1,10 +1,4 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import nodePath from 'node:path';
 import { afterEach, describe, expect, it } from '@jest/globals';
@@ -22,21 +16,19 @@ import {
 const { dirname, join } = nodePath;
 
 const dirs: string[] = [];
-function tree(files: Record<string, string>): string {
-  // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'nuxt-plugin-test-')));
+async function tree(files: Record<string, string>): Promise<string> {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), 'nuxt-plugin-test-')),
+  );
   dirs.push(root);
   for (const [path, content] of Object.entries(files)) {
-    // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-    mkdirSync(dirname(join(root, path)), { recursive: true });
-    // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-    writeFileSync(join(root, path), content);
+    await mkdir(dirname(join(root, path)), { recursive: true });
+    await writeFile(join(root, path), content);
   }
   return root;
 }
-afterEach(() => {
-  // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+afterEach(async () => {
+  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
 });
 
 const layout = {
@@ -63,8 +55,8 @@ describe('runtimeOutName', () => {
 });
 
 describe('rewriteSpecifier', () => {
-  it('adds the per-file extension to a runtime-internal import', () => {
-    const root = tree(layout);
+  it('adds the per-file extension to a runtime-internal import', async () => {
+    const root = await tree(layout);
     const scope = { runtimeDir: join(root, 'src/runtime'), entries: {} };
     expect(
       rewriteSpecifier(
@@ -75,8 +67,8 @@ describe('rewriteSpecifier', () => {
     ).toBe('../shared/b.js');
   });
 
-  it("points a runtime import of a bundled entry at the entry's output", () => {
-    const root = tree(layout);
+  it("points a runtime import of a bundled entry at the entry's output", async () => {
+    const root = await tree(layout);
     const scope = {
       runtimeDir: join(root, 'src/runtime'),
       entries: { [join(root, 'src/utils/headers.ts')]: 'utils/headers.mjs' },
@@ -90,8 +82,8 @@ describe('rewriteSpecifier', () => {
     ).toBe('../../utils/headers.mjs');
   });
 
-  it('points a runtime import of the module at the module output', () => {
-    const root = tree(layout);
+  it('points a runtime import of the module at the module output', async () => {
+    const root = await tree(layout);
     const scope = {
       runtimeDir: join(root, 'src/runtime'),
       entries: { [join(root, 'src/module.ts')]: 'module.js' },
@@ -105,8 +97,8 @@ describe('rewriteSpecifier', () => {
     ).toBe('../../module.js');
   });
 
-  it('leaves an import outside the runtime that is not an entry untouched', () => {
-    const root = tree(layout);
+  it('leaves an import outside the runtime that is not an entry untouched', async () => {
+    const root = await tree(layout);
     const scope = { runtimeDir: join(root, 'src/runtime'), entries: {} };
     expect(
       rewriteSpecifier(
@@ -117,8 +109,8 @@ describe('rewriteSpecifier', () => {
     ).toBe('../../other');
   });
 
-  it('keeps a .vue import and its query', () => {
-    const root = tree(layout);
+  it('keeps a .vue import and its query', async () => {
+    const root = await tree(layout);
     expect(
       rewriteSpecifier(
         '../components/C.vue?raw',
@@ -127,8 +119,8 @@ describe('rewriteSpecifier', () => {
     ).toBe('../components/C.vue?raw');
   });
 
-  it('points an import of a runtime stylesheet at the CSS it compiles to', () => {
-    const root = tree({ ...layout, 'src/runtime/assets/main.scss': '' });
+  it('points an import of a runtime stylesheet at the CSS it compiles to', async () => {
+    const root = await tree({ ...layout, 'src/runtime/assets/main.scss': '' });
     const scope = { runtimeDir: join(root, 'src/runtime'), entries: {} };
     expect(
       rewriteSpecifier(
@@ -139,8 +131,8 @@ describe('rewriteSpecifier', () => {
     ).toBe('../assets/main.css');
   });
 
-  it('leaves an import of a Sass partial untouched', () => {
-    const root = tree({ ...layout, 'src/runtime/assets/_vars.scss': '' });
+  it('leaves an import of a Sass partial untouched', async () => {
+    const root = await tree({ ...layout, 'src/runtime/assets/_vars.scss': '' });
     const scope = { runtimeDir: join(root, 'src/runtime'), entries: {} };
     expect(
       rewriteSpecifier(
@@ -155,8 +147,8 @@ describe('rewriteSpecifier', () => {
     expect(rewriteSpecifier('vue', '/x/a.ts')).toBe('vue');
   });
 
-  it('rewrites entry imports inside declarations too', () => {
-    const root = tree(layout);
+  it('rewrites entry imports inside declarations too', async () => {
+    const root = await tree(layout);
     const scope = {
       runtimeDir: join(root, 'src/runtime'),
       entries: { [join(root, 'src/utils/headers.ts')]: 'utils/headers.mjs' },
@@ -172,8 +164,8 @@ describe('rewriteSpecifier', () => {
 });
 
 describe('rewriteImports', () => {
-  it('rewrites static, dynamic and re-export specifiers of a module', () => {
-    const root = tree(layout);
+  it('rewrites static, dynamic and re-export specifiers of a module', async () => {
+    const root = await tree(layout);
     const code =
       'import "../shared/b";\nexport * from "../shared/b";\nconst m = () => import("../shared/b");\n';
     expect(rewriteImports(code, join(root, 'src/runtime/plugins/a.ts'))).toBe(
@@ -188,8 +180,8 @@ describe('sourceFileOf', () => {
     ['src/runtime/shared/b.js', 'src/runtime/shared/b.ts'],
     ['src/runtime/components/C.vue', 'src/runtime/components/C.vue'],
     ['src/runtime/missing', undefined],
-  ])('finds the source of %s', (target, expected) => {
-    const root = tree(layout);
+  ])('finds the source of %s', async (target, expected) => {
+    const root = await tree(layout);
     expect(sourceFileOf(join(root, target))).toBe(
       expected && join(root, expected),
     );

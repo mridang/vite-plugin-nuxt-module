@@ -1,11 +1,11 @@
 import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import nodePath from 'node:path';
 import { afterEach, describe, expect, it } from '@jest/globals';
@@ -13,24 +13,21 @@ import { afterEach, describe, expect, it } from '@jest/globals';
 import { PREPARE_OVERRIDES, prepareModule } from '../src/prepare.js';
 
 const dirs: string[] = [];
-function tree(files: Record<string, string>): string {
-  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-  const root = realpathSync(
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    mkdtempSync(nodePath.join(tmpdir(), 'nuxt-prepare-test-')),
+async function tree(files: Record<string, string>): Promise<string> {
+  const root = await realpath(
+    await mkdtemp(nodePath.join(tmpdir(), 'nuxt-prepare-test-')),
   );
   dirs.push(root);
   for (const [path, content] of Object.entries(files)) {
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    mkdirSync(nodePath.dirname(nodePath.join(root, path)), { recursive: true });
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    writeFileSync(nodePath.join(root, path), content);
+    await mkdir(nodePath.dirname(nodePath.join(root, path)), {
+      recursive: true,
+    });
+    await writeFile(nodePath.join(root, path), content);
   }
   return root;
 }
-afterEach(() => {
-  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+afterEach(async () => {
+  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
 });
 
 /** A fake `@nuxt/cli` at `dir` that records how `prepare` was run (as `name`) and writes what it would. */
@@ -54,30 +51,28 @@ function fakeCli(dir: string, name: string, body = ''): Record<string, string> {
   };
 }
 
-const loaded = (root: string) =>
-  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-  JSON.parse(readFileSync(nodePath.join(root, 'loaded.json'), 'utf8'));
+const loaded = async (root: string) =>
+  JSON.parse(await readFile(nodePath.join(root, 'loaded.json'), 'utf8'));
 
 describe('prepareModule', () => {
   it("writes the module's .nuxt types", async () => {
-    const root = tree({
+    const root = await tree({
       'package.json': '{}',
       ...fakeCli('node_modules/@nuxt/cli', 'own'),
     });
     await prepareModule(root, 'src/module.ts');
     expect(
-      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-      readFileSync(nodePath.join(root, '.nuxt/tsconfig.json'), 'utf8'),
+      await readFile(nodePath.join(root, '.nuxt/tsconfig.json'), 'utf8'),
     ).toBe('{}');
   }, 30_000);
 
   it("runs nuxi prepare in the module with nuxt-module-build's overrides", async () => {
-    const root = tree({
+    const root = await tree({
       'package.json': '{}',
       ...fakeCli('node_modules/@nuxt/cli', 'own'),
     });
     await prepareModule(root, 'src/module.ts');
-    const { command, cwd, overrides } = loaded(root);
+    const { command, cwd, overrides } = await loaded(root);
     expect([command, cwd, { ...overrides, modules: null }]).toEqual([
       'prepare',
       root,
@@ -86,12 +81,12 @@ describe('prepareModule', () => {
   }, 30_000);
 
   it('installs the module itself, plus a hook that writes every app template', async () => {
-    const root = tree({
+    const root = await tree({
       'package.json': '{}',
       ...fakeCli('node_modules/@nuxt/cli', 'own'),
     });
     await prepareModule(root, 'src/module.ts');
-    const { overrides, modules } = loaded(root);
+    const { overrides, modules } = await loaded(root);
     expect([overrides.modules[0], modules]).toEqual([
       nodePath.join(root, 'src/module.ts'),
       ['string', 'function'],
@@ -99,25 +94,26 @@ describe('prepareModule', () => {
   }, 30_000);
 
   it('runs the nuxi the installed nuxt comes with', async () => {
-    const root = tree({
+    const root = await tree({
       'package.json': '{}',
       'node_modules/nuxt/package.json': JSON.stringify({ name: 'nuxt' }),
       ...fakeCli('node_modules/nuxt/node_modules/@nuxt/cli', "nuxt's"),
       ...fakeCli('node_modules/@nuxt/cli', 'own'),
     });
     await prepareModule(root, 'src/module.ts');
-    expect(loaded(root).cli).toBe("nuxt's");
+    const state = await loaded(root);
+    expect(state.cli).toBe("nuxt's");
   }, 30_000);
 
   it('fails naming what to install without nuxi', async () => {
-    const root = tree({ 'package.json': '{}' });
+    const root = await tree({ 'package.json': '{}' });
     await expect(prepareModule(root, 'src/module.ts')).rejects.toThrow(
       /installed in/,
     );
   });
 
   it("fails with Nuxt's output when the module cannot be loaded", async () => {
-    const root = tree({
+    const root = await tree({
       'package.json': '{}',
       ...fakeCli(
         'node_modules/@nuxt/cli',

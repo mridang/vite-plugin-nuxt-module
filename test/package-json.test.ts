@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import nodePath from 'node:path';
 import { describe, expect, it } from '@jest/globals';
@@ -9,17 +9,15 @@ import {
   readPackageJson,
 } from '../src/package-json.js';
 
-function packageRoot(pkg: Record<string, unknown>): string {
-  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-  const root = mkdtempSync(nodePath.join(tmpdir(), 'vite-package-json-'));
-  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-  writeFileSync(nodePath.join(root, 'package.json'), JSON.stringify(pkg));
+async function packageRoot(pkg: Record<string, unknown>): Promise<string> {
+  const root = await mkdtemp(nodePath.join(tmpdir(), 'vite-package-json-'));
+  await writeFile(nodePath.join(root, 'package.json'), JSON.stringify(pkg));
   return root;
 }
 
 describe('readPackageJson', () => {
-  it("reads the package's manifest", () => {
-    expect(readPackageJson(packageRoot({ name: 'x' })).name).toBe('x');
+  it("reads the package's manifest", async () => {
+    expect(readPackageJson(await packageRoot({ name: 'x' })).name).toBe('x');
   });
 });
 
@@ -28,8 +26,8 @@ describe('isModulePackage', () => {
     [{ type: 'module' }, true],
     [{ type: 'commonjs' }, false],
     [{}, false],
-  ])('%j is a module package: %s', (pkg, expected) => {
-    expect(isModulePackage(packageRoot(pkg))).toBe(expected);
+  ])('%j is a module package: %s', async (pkg, expected) => {
+    expect(isModulePackage(await packageRoot(pkg))).toBe(expected);
   });
 });
 
@@ -47,8 +45,8 @@ describe('namesFile', () => {
     [{ typesVersions: { '*': { '.': ['./dist/types.d.mts'] } } }, true],
     [{ exports: { '.': { types: './dist/index.d.mts' } } }, false],
     [{}, false],
-  ])('%j names dist/types.d.mts: %s', (pkg, expected) => {
-    const root = packageRoot(pkg);
+  ])('%j names dist/types.d.mts: %s', async (pkg, expected) => {
+    const root = await packageRoot(pkg);
     expect(namesFile(root, nodePath.join(root, 'dist/types.d.mts'))).toBe(
       expected,
     );

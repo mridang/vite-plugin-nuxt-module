@@ -1,11 +1,10 @@
 import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  symlinkSync,
-  writeFileSync,
-} from 'node:fs';
+  appendFile,
+  mkdir,
+  readFile,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import nodePath from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 import { createLogger, type Logger } from 'vite';
@@ -24,10 +23,11 @@ import {
   sharedChunkFileNames,
   writeCompatibleDeclarations,
 } from '../src/outputs.js';
+import { pathExists } from './utils/fs.js';
 
 /** A module package of `files` that installs this package's own TypeScript, as the declaration steps type with it. */
-const tree = (files: Record<string, string>): string =>
-  fixture(files, { link: ['typescript'] });
+const tree = async (files: Record<string, string>): Promise<string> =>
+  await fixture(files, { link: ['typescript'] });
 
 const schemaInKit = 'node_modules/@nuxt/kit/node_modules/@nuxt/schema';
 
@@ -77,10 +77,10 @@ const starterModule = {
  * module's `node_modules` and next to each other. The module resolves `@nuxt/schema` itself, but the declaration
  * program reaches it only through the link next to `@nuxt/kit`.
  */
-function pnpmStarterModule(): string {
+async function pnpmStarterModule(): Promise<string> {
   const kit = 'node_modules/.pnpm/@nuxt+kit@1/node_modules/@nuxt/kit';
   const schema = 'node_modules/.pnpm/@nuxt+schema@1/node_modules/@nuxt/schema';
-  const root = tree({
+  const root = await tree({
     ...Object.fromEntries(
       Object.entries(starterModule).filter(
         ([p]) => !p.startsWith('node_modules/'),
@@ -93,15 +93,22 @@ function pnpmStarterModule(): string {
     [`${schema}/package.json`]: starterModule[`${schemaInKit}/package.json`],
     [`${schema}/index.d.ts`]: starterModule[`${schemaInKit}/index.d.ts`],
   });
-  const link = (target: string, path: string) => {
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    mkdirSync(nodePath.dirname(nodePath.join(root, path)), { recursive: true });
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    symlinkSync(nodePath.join(root, target), nodePath.join(root, path), 'dir');
+  const link = async (target: string, path: string) => {
+    await mkdir(nodePath.dirname(nodePath.join(root, path)), {
+      recursive: true,
+    });
+    await symlink(
+      nodePath.join(root, target),
+      nodePath.join(root, path),
+      'dir',
+    );
   };
-  link(kit, 'node_modules/@nuxt/kit');
-  link(schema, 'node_modules/@nuxt/schema');
-  link(schema, 'node_modules/.pnpm/@nuxt+kit@1/node_modules/@nuxt/schema');
+  await link(kit, 'node_modules/@nuxt/kit');
+  await link(schema, 'node_modules/@nuxt/schema');
+  await link(
+    schema,
+    'node_modules/.pnpm/@nuxt+kit@1/node_modules/@nuxt/schema',
+  );
   return root;
 }
 
@@ -110,9 +117,12 @@ async function buildModule(root: string): Promise<void> {
 }
 
 /** Waits until `done()` holds, or fails after `ms`. */
-async function until(done: () => boolean, ms = 45_000): Promise<void> {
+async function until(
+  done: () => boolean | Promise<boolean>,
+  ms = 45_000,
+): Promise<void> {
   const deadline = Date.now() + ms;
-  while (!done()) {
+  while (!(await done())) {
     if (Date.now() > deadline) throw new Error('timed out');
     await setTimeout(100);
   }
@@ -130,15 +140,15 @@ function errorLogger(errors: string[]): Logger {
 }
 
 describe('hoistedTypePaths', () => {
-  it('maps @nuxt/schema to the copy @nuxt/kit has when the module cannot resolve it', () => {
-    const root = tree(starterModule);
+  it('maps @nuxt/schema to the copy @nuxt/kit has when the module cannot resolve it', async () => {
+    const root = await tree(starterModule);
     expect(hoistedTypePaths(root)['@nuxt/schema']).toEqual([
       nodePath.join(root, schemaInKit),
     ]);
   });
 
-  it("maps @nuxt/schema to the module's own copy when it has one", () => {
-    const root = tree({
+  it("maps @nuxt/schema to the module's own copy when it has one", async () => {
+    const root = await tree({
       ...starterModule,
       'node_modules/@nuxt/schema/package.json': JSON.stringify({
         name: '@nuxt/schema',
@@ -149,12 +159,12 @@ describe('hoistedTypePaths', () => {
     ]);
   });
 
-  it('maps nothing for a module without Nuxt packages', () => {
-    expect(hoistedTypePaths(tree({ 'package.json': '{}' }))).toEqual({});
+  it('maps nothing for a module without Nuxt packages', async () => {
+    expect(hoistedTypePaths(await tree({ 'package.json': '{}' }))).toEqual({});
   });
 
-  it('maps #app/nuxt into the installed nuxt, like nuxt-module-build', () => {
-    const root = tree({
+  it('maps #app/nuxt into the installed nuxt, like nuxt-module-build', async () => {
+    const root = await tree({
       'package.json': '{}',
       'node_modules/nuxt/package.json': '{}',
     });
@@ -165,8 +175,8 @@ describe('hoistedTypePaths', () => {
 });
 
 describe('moduleDeclarationOptions', () => {
-  it("adds @nuxt/schema to the tsconfig's types when the module resolves it", () => {
-    const root = tree({
+  it("adds @nuxt/schema to the tsconfig's types when the module resolves it", async () => {
+    const root = await tree({
       ...starterModule,
       'tsconfig.json': JSON.stringify({ compilerOptions: { types: ['node'] } }),
       'node_modules/@nuxt/schema/package.json': JSON.stringify({
@@ -179,16 +189,16 @@ describe('moduleDeclarationOptions', () => {
     ).toEqual(['node', '@nuxt/schema']);
   });
 
-  it('adds no types the module cannot resolve', () => {
-    const root = tree(starterModule);
+  it('adds no types the module cannot resolve', async () => {
+    const root = await tree(starterModule);
     expect(
       moduleDeclarationOptions(root, nodePath.join(root, 'tsconfig.json'))
         .types,
     ).toBeUndefined();
   });
 
-  it("keeps the tsconfig's own paths, made absolute, next to the hoisted ones", () => {
-    const root = tree({
+  it("keeps the tsconfig's own paths, made absolute, next to the hoisted ones", async () => {
+    const root = await tree({
       ...starterModule,
       'tsconfig.json': JSON.stringify({
         compilerOptions: { paths: { '~/*': ['./src/*'] } },
@@ -208,28 +218,24 @@ describe('sharedChunkFileNames', () => {
 });
 
 describe('writeCompatibleDeclarations', () => {
-  it("copies each entry's .d.mts to a .d.ts", () => {
-    const root = withTools({ name: 'mod' }, {});
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    mkdirSync(nodePath.join(root, 'dist'));
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    writeFileSync(nodePath.join(root, 'dist/module.d.mts'), 'export {};');
+  it("copies each entry's .d.mts to a .d.ts", async () => {
+    const root = await withTools({ name: 'mod' }, {});
+    await mkdir(nodePath.join(root, 'dist'));
+    await writeFile(nodePath.join(root, 'dist/module.d.mts'), 'export {};');
     writeCompatibleDeclarations(nodePath.join(root, 'dist'), [
       'module',
       'missing',
     ]);
     expect([
-      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-      readFileSync(nodePath.join(root, 'dist/module.d.ts'), 'utf8'),
-      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-      existsSync(nodePath.join(root, 'dist/missing.d.ts')),
+      await readFile(nodePath.join(root, 'dist/module.d.ts'), 'utf8'),
+      await pathExists(nodePath.join(root, 'dist/missing.d.ts')),
     ]).toEqual(['export {};', false]);
   });
 });
 
 describe('nuxtModuleOutputs', () => {
   it('writes nothing after a failed build', async () => {
-    const root = withTools({ name: 'mod' }, {});
+    const root = await withTools({ name: 'mod' }, {});
     let runtimeDir: string | undefined;
     let target: string | undefined;
     let moduleMeta: Readonly<Record<string, unknown>> | undefined;
@@ -259,22 +265,22 @@ describe('nuxtModuleOutputs', () => {
     });
     (plugin.buildEnd as unknown as (e: Error) => void)(new Error('x'));
     await (plugin.closeBundle as unknown as () => Promise<void>)();
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    expect(existsSync(nodePath.join(root, 'dist/module.json'))).toBe(false);
+    expect(await pathExists(nodePath.join(root, 'dist/module.json'))).toBe(
+      false,
+    );
   });
 
   it('declares a module that depends on @nuxt/kit only', async () => {
-    const root = tree(starterModule);
+    const root = await tree(starterModule);
     await buildModule(root);
     expect(
-      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-      readFileSync(nodePath.join(root, 'dist/module.d.mts'), 'utf8'),
+      await readFile(nodePath.join(root, 'dist/module.d.mts'), 'utf8'),
     ).toContain('import("@nuxt/schema").NuxtModule');
   }, 60_000);
 
   it('declares a module that depends on @nuxt/kit only when its tsconfig sets declaration', async () => {
     const tsconfig = JSON.parse(starterModule['tsconfig.json']);
-    const root = tree({
+    const root = await tree({
       ...starterModule,
       'tsconfig.json': JSON.stringify({
         ...tsconfig,
@@ -283,22 +289,20 @@ describe('nuxtModuleOutputs', () => {
     });
     await buildModule(root);
     expect(
-      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-      readFileSync(nodePath.join(root, 'dist/module.d.mts'), 'utf8'),
+      await readFile(nodePath.join(root, 'dist/module.d.mts'), 'utf8'),
     ).toContain('import("@nuxt/schema").NuxtModule');
   }, 60_000);
 
   it('declares a module whose @nuxt/schema is linked in by pnpm', async () => {
-    const root = pnpmStarterModule();
+    const root = await pnpmStarterModule();
     await buildModule(root);
     expect(
-      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-      readFileSync(nodePath.join(root, 'dist/module.d.mts'), 'utf8'),
+      await readFile(nodePath.join(root, 'dist/module.d.mts'), 'utf8'),
     ).toContain('import("@nuxt/schema").NuxtModule');
   }, 60_000);
 
   it('reports a type error under --watch and rebuilds once it is fixed', async () => {
-    const root = tree(starterModule);
+    const root = await tree(starterModule);
     const errors: string[] = [];
     const module = nodePath.join(root, 'src/module.ts');
     const declaration = nodePath.join(root, 'dist/module.d.mts');
@@ -308,23 +312,18 @@ describe('nuxtModuleOutputs', () => {
       { customLogger: errorLogger(errors) },
     );
     try {
-      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-      await until(() => existsSync(declaration));
-      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-      appendFileSync(module, 'export const broken: number = "nan";\n');
+      await until(() => pathExists(declaration));
+      await appendFile(module, 'export const broken: number = "nan";\n');
       await until(() => errors.length > 0);
-      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-      writeFileSync(
+      await writeFile(
         module,
         `${starterModule['src/module.ts']}export const fixed = 1;\n`,
       );
-      await until(
-        () =>
-          // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-          existsSync(declaration) &&
-          // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-          readFileSync(declaration, 'utf8').includes('fixed'),
-      );
+      await until(async () => {
+        if (!(await pathExists(declaration))) return false;
+        const text = await readFile(declaration, 'utf8');
+        return text.includes('fixed');
+      });
     } finally {
       await watcher.close();
     }
@@ -332,13 +331,11 @@ describe('nuxtModuleOutputs', () => {
   }, 120_000);
 
   it('writes no source maps by default', async () => {
-    const root = tree(starterModule);
+    const root = await tree(starterModule);
     await buildModule(root);
     expect([
-      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-      existsSync(nodePath.join(root, 'dist/module.mjs.map')),
-      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-      existsSync(nodePath.join(root, 'dist/module.d.mts.map')),
+      await pathExists(nodePath.join(root, 'dist/module.mjs.map')),
+      await pathExists(nodePath.join(root, 'dist/module.d.mts.map')),
     ]).toEqual([false, false]);
   }, 60_000);
 
@@ -355,18 +352,16 @@ describe('nuxtModuleOutputs', () => {
     'writes module.json, and types.d.mts when the exports %j name it',
     async (exportsMap, typesEntry) => {
       const pkg = JSON.parse(starterModule['package.json']);
-      const root = tree({
+      const root = await tree({
         ...starterModule,
         'package.json': JSON.stringify({ ...pkg, exports: exportsMap }),
       });
       await buildModule(root);
       expect([
         JSON.parse(
-          // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-          readFileSync(nodePath.join(root, 'dist/module.json'), 'utf8'),
+          await readFile(nodePath.join(root, 'dist/module.json'), 'utf8'),
         ).name,
-        // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-        existsSync(nodePath.join(root, 'dist/types.d.mts')),
+        await pathExists(nodePath.join(root, 'dist/types.d.mts')),
       ]).toEqual(['starter', typesEntry]);
     },
     60_000,

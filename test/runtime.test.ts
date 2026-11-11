@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdir, readdir, writeFile } from 'node:fs/promises';
 import nodePath from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
@@ -16,39 +16,34 @@ import {
   runtimeFiles,
   runtimeImportTypes,
 } from '../src/runtime.js';
+import { pathExists } from './utils/fs.js';
 
 const { join } = nodePath;
 
 /** A module root with `files` under it and a fake Sass that wraps the source in a comment. */
-function moduleRoot(files: Record<string, string>): string {
-  const root = withTools({ name: 'mod', type: 'module' }, {});
+async function moduleRoot(files: Record<string, string>): Promise<string> {
+  const root = await withTools({ name: 'mod', type: 'module' }, {});
   const sass = join(root, 'node_modules/sass');
-  // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-  mkdirSync(sass, { recursive: true });
-  // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-  writeFileSync(
+  await mkdir(sass, { recursive: true });
+  await writeFile(
     join(sass, 'package.json'),
     JSON.stringify({ name: 'sass', type: 'module', exports: './index.js' }),
   );
-  // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-  writeFileSync(
+  await writeFile(
     join(sass, 'index.js'),
     'import { readFileSync } from "node:fs";\nexport const compile = (file) => ({ css: `/* compiled */ ${readFileSync(file, "utf8")}` });\nexport const compileString = () => ({ css: "" });\n',
   );
   for (const [name, text] of Object.entries(files)) {
-    // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-    mkdirSync(join(root, name, '..'), { recursive: true });
-    // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-    writeFileSync(join(root, name), text);
+    await mkdir(join(root, name, '..'), { recursive: true });
+    await writeFile(join(root, name), text);
   }
-  // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-  writeFileSync(join(root, 'tsconfig.json'), '{}');
+  await writeFile(join(root, 'tsconfig.json'), '{}');
   return root;
 }
 
 describe('runtimeFiles', () => {
-  it('leaves out tests, stories and the excluded globs', () => {
-    const root = moduleRoot({
+  it('leaves out tests, stories and the excluded globs', async () => {
+    const root = await moduleRoot({
       'src/runtime/a.ts': '',
       'src/runtime/a.test.ts': '',
       'src/runtime/b.stories.ts': '',
@@ -75,20 +70,19 @@ describe('buildRuntime', () => {
     });
 
   it('compiles Sass to CSS like mkdist, leaving partials and source stylesheets out', async () => {
-    const root = moduleRoot({
+    const root = await moduleRoot({
       'src/runtime/style.scss': "@use 'partial';",
       'src/runtime/_partial.scss': 'a { b: c }',
     });
     await build(root);
     expect([
-      // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-      readdirSync(join(root, 'dist/runtime')),
-      output(root, 'dist/runtime/style.css'),
+      await readdir(join(root, 'dist/runtime')),
+      await output(root, 'dist/runtime/style.css'),
     ]).toEqual([['style.css'], "/* compiled */ @use 'partial';"]);
   });
 
   it('transpiles scripts with explicit specifiers and copies other files', async () => {
-    const root = moduleRoot({
+    const root = await moduleRoot({
       'src/runtime/plugin.ts':
         'import { x } from "./lib/x";\nexport default (): number => x;\n',
       'src/runtime/lib/x.ts': 'export const x: number = 1;\n',
@@ -96,18 +90,17 @@ describe('buildRuntime', () => {
     });
     await build(root);
     expect([
-      output(root, 'dist/runtime/plugin.js'),
-      // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-      existsSync(join(root, 'dist/runtime/data.json')),
+      await output(root, 'dist/runtime/plugin.js'),
+      await pathExists(join(root, 'dist/runtime/data.json')),
     ]).toEqual([expect.stringContaining('from "./lib/x.js"'), true]);
   });
 
   it('ships a hand-written declaration as written', async () => {
-    const root = moduleRoot({
+    const root = await moduleRoot({
       'src/runtime/types.d.ts': 'export interface A {}',
     });
     await build(root);
-    expect(output(root, 'dist/runtime/types.d.ts')).toBe(
+    expect(await output(root, 'dist/runtime/types.d.ts')).toBe(
       'export interface A {}',
     );
   });
@@ -128,8 +121,8 @@ describe('declarationRuntimeExternals', () => {
 
   it.each([['./runtime/composables/use'], ['./runtime/composables/use.js']])(
     'imports the runtime file %s is written for instead of inlining its types',
-    (id) => {
-      const root = moduleRoot({
+    async (id) => {
+      const root = await moduleRoot({
         'src/runtime/composables/use.ts': '',
         'src/index.ts': '',
       });
@@ -140,8 +133,8 @@ describe('declarationRuntimeExternals', () => {
     },
   );
 
-  it('keeps a package import external', () => {
-    expect(resolveId(moduleRoot({}), 'h3')).toEqual({
+  it('keeps a package import external', async () => {
+    expect(resolveId(await moduleRoot({}), 'h3')).toEqual({
       id: 'h3',
       external: true,
     });
@@ -170,8 +163,8 @@ describe('renderRuntimeSpecifiers', () => {
 });
 
 describe('runtimeImportTypes', () => {
-  it("names the runtime file of an inferred import type, whatever the declaring file's directory", () => {
-    const root = moduleRoot({ 'src/runtime/x.ts': '' });
+  it("names the runtime file of an inferred import type, whatever the declaring file's directory", async () => {
+    const root = await moduleRoot({ 'src/runtime/x.ts': '' });
     expect(
       runtimeImportTypes(
         'export declare const a: () => import("../runtime/x").X;',
@@ -204,25 +197,24 @@ describe('runtime imports of bundled entries', () => {
       'import { makeX } from "./runtime/x";\nexport default Object.assign((): void => {}, { getMeta: async () => ({ configKey: "mod" }), make: () => makeX() });\n',
   };
   const built = async () => {
-    const root = fixture(files);
+    const root = await fixture(files);
     await buildFixture(
       root,
       { entry: { 'utils/a': 'src/deep/a.ts', other: 'src/other.ts' } },
       { build: { outDir: 'build/out' } },
     );
     const out = join(root, 'build/out');
-    const shared =
-      // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-      readdirSync(join(out, 'shared')).find((f) => f.endsWith('.mjs')) ?? '';
+    const chunks = await readdir(join(out, 'shared'));
+    const shared = chunks.find((f) => f.endsWith('.mjs')) ?? '';
     return { out, shared };
   };
 
   it('imports them relative to each chunk under a nested output directory', async () => {
     const { out, shared } = await built();
     expect([
-      output(out, 'module.mjs'),
-      output(out, 'utils/a.mjs'),
-      output(out, `shared/${shared}`),
+      await output(out, 'module.mjs'),
+      await output(out, 'utils/a.mjs'),
+      await output(out, `shared/${shared}`),
     ]).toEqual([
       expect.stringContaining('from "./runtime/x.js"'),
       expect.stringContaining('from "../runtime/x.js"'),
@@ -232,18 +224,19 @@ describe('runtime imports of bundled entries', () => {
 
   it('types them relative to each declaration, written or inferred', async () => {
     const { out } = await built();
-    expect([output(out, 'module.d.mts'), output(out, 'utils/a.d.mts')]).toEqual(
-      [
-        expect.stringContaining('import("./runtime/x.js").X'),
-        expect.stringMatching(/from ["']\.\.\/runtime\/x\.js["']/),
-      ],
-    );
+    expect([
+      await output(out, 'module.d.mts'),
+      await output(out, 'utils/a.d.mts'),
+    ]).toEqual([
+      expect.stringContaining('import("./runtime/x.js").X'),
+      expect.stringMatching(/from ["']\.\.\/runtime\/x\.js["']/),
+    ]);
   }, 60_000);
 });
 
 /** A module package of `files` (a `package.json` unless given) that installs this package's own TypeScript. */
-function tree(files: Record<string, string>): string {
-  return fixture(
+async function tree(files: Record<string, string>): Promise<string> {
+  return await fixture(
     {
       'package.json': JSON.stringify({ name: 'mod', type: 'module' }),
       ...files,
@@ -300,22 +293,22 @@ async function buildPrepared(root: string, dts = false): Promise<void> {
   });
 }
 
-const built = (root: string, file: string) =>
-  output(root, join('dist/runtime', file));
+const built = async (root: string, file: string) =>
+  await output(root, join('dist/runtime', file));
 
 describe('buildRuntime of a prepared module', () => {
   it("keeps a declared class field under a prepared module's tsconfig (useDefineForClassFields)", async () => {
-    const root = tree({
+    const root = await tree({
       ...prepared,
       'src/runtime/counter.ts':
         'export class Counter {\n  count!: number;\n}\n',
     });
     await buildPrepared(root);
-    expect(built(root, 'counter.js')).toMatch(/^[ \t]*count;$/m);
+    expect(await built(root, 'counter.js')).toMatch(/^[ \t]*count;$/m);
   });
 
   it('drops a declared class field when the tsconfig turns useDefineForClassFields off', async () => {
-    const root = tree({
+    const root = await tree({
       'tsconfig.json': JSON.stringify({
         compilerOptions: { target: 'ESNext', useDefineForClassFields: false },
       }),
@@ -323,11 +316,11 @@ describe('buildRuntime of a prepared module', () => {
         'export class Counter {\n  count!: number;\n}\n',
     });
     await buildPrepared(root);
-    expect(built(root, 'counter.js')).not.toMatch(/^[ \t]*count;$/m);
+    expect(await built(root, 'counter.js')).not.toMatch(/^[ \t]*count;$/m);
   });
 
   it('fails when the module was not prepared, instead of guessing its compiler options', async () => {
-    const root = tree({
+    const root = await tree({
       'tsconfig.json': prepared['tsconfig.json'],
       'src/runtime/counter.ts': 'export class Counter {}\n',
     });
@@ -335,35 +328,33 @@ describe('buildRuntime of a prepared module', () => {
   });
 
   it("compiles a runtime stylesheet to CSS with the module's own Sass", async () => {
-    const root = tree({
+    const root = await tree({
       ...prepared,
       ...fakeSass,
       'src/runtime/assets/main.scss': 'a { b: c }',
     });
     await buildPrepared(root);
     expect([
-      built(root, 'assets/main.css'),
-      // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-      existsSync(join(root, 'dist/runtime/assets/main.scss')),
+      await built(root, 'assets/main.css'),
+      await pathExists(join(root, 'dist/runtime/assets/main.scss')),
     ]).toEqual(['/* compiled main.scss */', false]);
   });
 
   it('ships no Sass partial', async () => {
-    const root = tree({
+    const root = await tree({
       ...prepared,
       ...fakeSass,
       'src/runtime/assets/_vars.scss': '$c: red;',
       'src/runtime/assets/main.scss': 'a { b: c }',
     });
     await buildPrepared(root);
-    // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
-    expect(existsSync(join(root, 'dist/runtime/assets/_vars.scss'))).toBe(
+    expect(await pathExists(join(root, 'dist/runtime/assets/_vars.scss'))).toBe(
       false,
     );
   });
 
   it("points a script's import of a runtime stylesheet at the compiled CSS", async () => {
-    const root = tree({
+    const root = await tree({
       ...prepared,
       ...fakeSass,
       'src/runtime/assets/main.scss': 'a { b: c }',
@@ -371,23 +362,23 @@ describe('buildRuntime of a prepared module', () => {
         'import "./assets/main.scss";\nexport const ok = true;\n',
     });
     await buildPrepared(root);
-    expect(built(root, 'plugin.js')).toContain('"./assets/main.css"');
+    expect(await built(root, 'plugin.js')).toContain('"./assets/main.css"');
   });
 
   it('declares a runtime .js file', async () => {
-    const root = tree({
+    const root = await tree({
       ...prepared,
       'src/runtime/utils/plain.js':
         'export function plain(a) {\n  return a;\n}\n',
     });
     await buildPrepared(root, true);
-    expect(built(root, 'utils/plain.d.ts')).toContain(
+    expect(await built(root, 'utils/plain.d.ts')).toContain(
       'export function plain(a: any): any;',
     );
   });
 
   it('ships a hand-written declaration of a runtime .js file as written', async () => {
-    const root = tree({
+    const root = await tree({
       ...prepared,
       'src/runtime/utils/plain.js':
         'export function plain(a) {\n  return a;\n}\n',
@@ -395,13 +386,13 @@ describe('buildRuntime of a prepared module', () => {
         'export declare function plain(a: string): string;\n',
     });
     await buildPrepared(root, true);
-    expect(built(root, 'utils/plain.d.ts')).toBe(
+    expect(await built(root, 'utils/plain.d.ts')).toBe(
       'export declare function plain(a: string): string;\n',
     );
   });
 
   it('fails when a runtime declaration cannot be emitted', async () => {
-    const root = tree({
+    const root = await tree({
       ...prepared,
       'src/runtime/make.ts':
         'export const make = () => class {\n  private secret = 1;\n};\n',
@@ -412,24 +403,24 @@ describe('buildRuntime of a prepared module', () => {
   });
 
   it('leaves type errors to the type check', async () => {
-    const root = tree({
+    const root = await tree({
       ...prepared,
       'src/runtime/wrong.ts':
         'export const n: number = "one" as unknown as string;\n',
     });
     await buildPrepared(root, true);
-    expect(built(root, 'wrong.d.ts')).toContain(
+    expect(await built(root, 'wrong.d.ts')).toContain(
       'export declare const n: number;',
     );
   });
 
   it('names nuxt/app instead of #app in the runtime declarations', async () => {
-    const root = tree({
+    const root = await tree({
       ...prepared,
       'src/runtime/app.ts':
         'import type { NuxtApp } from "#app";\nexport const version = (app: NuxtApp): string => app.version;\nexport type App = NuxtApp;\n',
     });
     await buildPrepared(root, true);
-    expect(built(root, 'app.d.ts')).toContain('from "nuxt/app"');
+    expect(await built(root, 'app.d.ts')).toContain('from "nuxt/app"');
   });
 });

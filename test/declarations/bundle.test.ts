@@ -1,4 +1,4 @@
-import { existsSync, writeFileSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
@@ -12,6 +12,7 @@ import {
   mergedCompilerOptions,
   STRING_ASSET_IMPORT,
 } from '../../src/declarations/bundle.js';
+import { pathExists } from '../utils/fs.js';
 
 const { join, resolve } = path;
 
@@ -77,7 +78,7 @@ describe('CSS_MODULE_IMPORT', () => {
 
 describe('emitBundledTypes', () => {
   it('fails on a type error the declaration emit itself lets through', async () => {
-    const root = fixture({
+    const root = await fixture({
       'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
       'tsconfig.json': FIXTURE_TSCONFIG,
       'src/index.ts': 'export const x: number = "s";\n',
@@ -86,20 +87,19 @@ describe('emitBundledTypes', () => {
   }, 60_000);
 
   it('declares the sources as they are now when it runs again in the same process', async () => {
-    const root = fixture({
+    const root = await fixture({
       'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
       'tsconfig.json': FIXTURE_TSCONFIG,
       'src/index.ts': 'export const before = 1;\n',
     });
     await emit(root);
-    // eslint-disable-next-line n/no-sync -- sync is fine in a script or bootstrap: a test writes its fixture
-    writeFileSync(join(root, 'src/index.ts'), 'export const after = 1;\n');
+    await writeFile(join(root, 'src/index.ts'), 'export const after = 1;\n');
     await emit(root);
-    expect(output(root, 'dist/index.d.mts')).toContain('after');
+    expect(await output(root, 'dist/index.d.mts')).toContain('after');
   }, 60_000);
 
   it('fails when the written declarations do not type-check (a namespace the bundler never declares)', async () => {
-    const root = fixture(
+    const root = await fixture(
       {
         'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
         'tsconfig.json': FIXTURE_TSCONFIG,
@@ -120,7 +120,7 @@ describe('emitBundledTypes', () => {
   }, 60_000);
 
   it('types a string-valued asset import instead of importing a file that is not shipped', async () => {
-    const root = fixture({
+    const root = await fixture({
       'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
       'tsconfig.json': FIXTURE_TSCONFIG,
       'src/assets.d.ts':
@@ -130,7 +130,7 @@ describe('emitBundledTypes', () => {
         'export { default as template } from "./template.liquid";\n',
     });
     await emit(root);
-    expect(output(root, 'dist/index.d.mts')).toMatch(
+    expect(await output(root, 'dist/index.d.mts')).toMatch(
       /^(?![\s\S]*from ["']\.\/template\.liquid)[\s\S]*: string/,
     );
   }, 60_000);
@@ -138,7 +138,7 @@ describe('emitBundledTypes', () => {
 
 describe('emitBundledTypes re-exports', () => {
   it("keeps a package's types a type-only star re-export when the entry reaches it through a module", async () => {
-    const root = fixture(
+    const root = await fixture(
       {
         'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
         'tsconfig.json': FIXTURE_TSCONFIG,
@@ -155,13 +155,13 @@ describe('emitBundledTypes re-exports', () => {
       { link: ['typescript'] },
     );
     await emit(root, [/^dep/]);
-    expect(output(root, 'dist/index.d.mts')).toMatch(
+    expect(await output(root, 'dist/index.d.mts')).toMatch(
       /^export type \* from "dep";$/m,
     );
   }, 60_000);
 
   it('builds a package that imports its own name before its declarations exist', async () => {
-    const root = fixture({
+    const root = await fixture({
       'package.json': JSON.stringify({
         name: 'fx',
         type: 'module',
@@ -184,13 +184,13 @@ describe('emitBundledTypes re-exports', () => {
         'lib/sub': join(root, 'src/lib/sub.ts'),
       },
     });
-    expect(output(root, 'dist/index.d.mts')).toContain('from "fx/sub"');
+    expect(await output(root, 'dist/index.d.mts')).toContain('from "fx/sub"');
   }, 60_000);
 });
 
 describe('emitBundledTypes assets', () => {
-  const assetPackage = () =>
-    fixture({
+  const assetPackage = async () =>
+    await fixture({
       'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
       'tsconfig.json': FIXTURE_TSCONFIG,
       'src/assets.d.ts': [
@@ -205,25 +205,25 @@ describe('emitBundledTypes assets', () => {
     });
 
   it('types a CSS module import as its class names, the object Vite makes of it', async () => {
-    const root = assetPackage();
+    const root = await assetPackage();
     await emit(root);
-    expect(output(root, 'dist/index.d.mts')).toMatch(
+    expect(await output(root, 'dist/index.d.mts')).toMatch(
       /const (\w+): \{\s*readonly \[key: string\]: string;?\s*\};[\s\S]*\1 as styles/,
     );
   }, 60_000);
 
   it('maps every declaration to a file that exists', async () => {
-    const root = assetPackage();
+    const root = await assetPackage();
     await emit(root);
-    const { sources } = JSON.parse(output(root, 'dist/index.d.mts.map')) as {
+    const { sources } = JSON.parse(
+      await output(root, 'dist/index.d.mts.map'),
+    ) as {
       sources: string[];
     };
-    expect(
-      sources.filter(
-        // eslint-disable-next-line n/no-sync -- sync is fine in a script or bootstrap: a test checks its build output
-        (source) => !existsSync(resolve(root, 'dist', source)),
-      ),
-    ).toEqual([]);
+    const exists = await Promise.all(
+      sources.map((source) => pathExists(resolve(root, 'dist', source))),
+    );
+    expect(sources.filter((_, i) => !exists[i])).toEqual([]);
   }, 60_000);
 });
 
@@ -235,23 +235,22 @@ describe('emitBundledTypes warnings', () => {
       this.warn({ message: 'careful', code: 'OWN_CODE' });
     },
   };
-  const plain = () =>
-    fixture({
+  const plain = async () =>
+    await fixture({
       'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
       'tsconfig.json': FIXTURE_TSCONFIG,
       'src/index.ts': 'export const a = 1;\n',
     });
 
   it('allows a plugin warning by the code its plugin gave it, like the JS build', async () => {
-    const root = plain();
+    const root = await plain();
     await emit(root, [], { plugins: [warning], allowWarnings: ['OWN_CODE'] });
-    // eslint-disable-next-line n/no-sync -- sync is fine in a script or bootstrap: a test checks its build output
-    expect(existsSync(join(root, 'dist/index.d.mts'))).toBe(true);
+    expect(await pathExists(join(root, 'dist/index.d.mts'))).toBe(true);
   }, 60_000);
 
   it('fails on a plugin warning that is not allowed, naming its code', async () => {
-    await expect(emit(plain(), [], { plugins: [warning] })).rejects.toThrow(
-      /OWN_CODE: careful/,
-    );
+    await expect(
+      emit(await plain(), [], { plugins: [warning] }),
+    ).rejects.toThrow(/OWN_CODE: careful/);
   }, 60_000);
 });

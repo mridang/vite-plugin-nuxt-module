@@ -1,11 +1,11 @@
 import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import nodePath from 'node:path';
 import { afterEach, describe, expect, it } from '@jest/globals';
@@ -16,24 +16,21 @@ import { nodeModulesPackage } from '../src/implicit-dependencies.js';
 import type { NuxtModuleOptions } from '../src/options.js';
 
 const dirs: string[] = [];
-function tree(files: Record<string, string>): string {
-  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-  const root = realpathSync(
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    mkdtempSync(nodePath.join(tmpdir(), 'nuxt-implicit-test-')),
+async function tree(files: Record<string, string>): Promise<string> {
+  const root = await realpath(
+    await mkdtemp(nodePath.join(tmpdir(), 'nuxt-implicit-test-')),
   );
   dirs.push(root);
   for (const [path, content] of Object.entries(files)) {
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    mkdirSync(nodePath.dirname(nodePath.join(root, path)), { recursive: true });
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    writeFileSync(nodePath.join(root, path), content);
+    await mkdir(nodePath.dirname(nodePath.join(root, path)), {
+      recursive: true,
+    });
+    await writeFile(nodePath.join(root, path), content);
   }
   return root;
 }
-afterEach(() => {
-  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+afterEach(async () => {
+  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
 });
 
 /** A module importing `helper`, a package it lists only under `devDependencies`. */
@@ -73,26 +70,24 @@ describe('nodeModulesPackage', () => {
 
 describe('implicitDependencies', () => {
   it('fails a build that inlines a package the module does not depend on', async () => {
-    await expect(buildModule(tree(moduleWithDevDependency))).rejects.toThrow(
-      /Implicitly bundling "helper"/,
-    );
+    await expect(
+      buildModule(await tree(moduleWithDevDependency)),
+    ).rejects.toThrow(/Implicitly bundling "helper"/);
   }, 60_000);
 
   it('inlines it anyway when its warning code is allowed', async () => {
-    const root = tree(moduleWithDevDependency);
+    const root = await tree(moduleWithDevDependency);
     await buildModule(root, { allowWarnings: [IMPLICIT_DEPENDENCY] });
     expect(
-      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-      readFileSync(nodePath.join(root, 'dist/module.mjs'), 'utf8'),
+      await readFile(nodePath.join(root, 'dist/module.mjs'), 'utf8'),
     ).toContain('const help = ');
   }, 60_000);
 
   it('inlines a package listed in bundle', async () => {
-    const root = tree(moduleWithDevDependency);
+    const root = await tree(moduleWithDevDependency);
     await buildModule(root, { bundle: ['helper'] });
     expect(
-      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-      readFileSync(nodePath.join(root, 'dist/module.mjs'), 'utf8'),
+      await readFile(nodePath.join(root, 'dist/module.mjs'), 'utf8'),
     ).toContain('const help = ');
   }, 60_000);
 });

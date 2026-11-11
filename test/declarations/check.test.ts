@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
@@ -18,8 +18,8 @@ const fixtureOptions = JSON.parse(FIXTURE_TSCONFIG).compilerOptions as Record<
 >;
 
 describe('sourceTypeErrors', () => {
-  it('reports a type error of the sources, relative to the root', () => {
-    const root = fixture({
+  it('reports a type error of the sources, relative to the root', async () => {
+    const root = await fixture({
       'package.json': '{}',
       'tsconfig.json': FIXTURE_TSCONFIG,
       'src/index.ts': 'export const x: number = "s";\n',
@@ -29,8 +29,8 @@ describe('sourceTypeErrors', () => {
     ]);
   });
 
-  it('reports nothing for sources that type-check', () => {
-    const root = fixture({
+  it('reports nothing for sources that type-check', async () => {
+    const root = await fixture({
       'package.json': '{}',
       'tsconfig.json': FIXTURE_TSCONFIG,
       'src/index.ts': 'export const x: number = 1;\n',
@@ -38,8 +38,8 @@ describe('sourceTypeErrors', () => {
     expect(sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual([]);
   });
 
-  it('reports an option error, as tsc -p does', () => {
-    const root = fixture({
+  it('reports an option error, as tsc -p does', async () => {
+    const root = await fixture({
       'package.json': '{}',
       'tsconfig.json': JSON.stringify({
         compilerOptions: { ...fixtureOptions, types: ['nonexistent-types'] },
@@ -52,8 +52,8 @@ describe('sourceTypeErrors', () => {
     ]);
   });
 
-  it('leaves the tests under the source root out', () => {
-    const root = fixture({
+  it('leaves the tests under the source root out', async () => {
+    const root = await fixture({
       'package.json': '{}',
       'tsconfig.json': FIXTURE_TSCONFIG,
       'src/index.ts': 'export const x: number = 1;\n',
@@ -63,8 +63,8 @@ describe('sourceTypeErrors', () => {
     expect(sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual([]);
   });
 
-  it('checks under the compiler options the declarations are emitted with', () => {
-    const root = fixture(
+  it('checks under the compiler options the declarations are emitted with', async () => {
+    const root = await fixture(
       {
         'package.json': '{}',
         'tsconfig.json': FIXTURE_TSCONFIG,
@@ -96,8 +96,8 @@ describe('isSourceTest', () => {
 });
 
 describe('declarationTypeErrors', () => {
-  it('reports an error inside the written declarations only', () => {
-    const root = fixture({
+  it('reports an error inside the written declarations only', async () => {
+    const root = await fixture({
       'package.json': '{}',
       'tsconfig.json': FIXTURE_TSCONFIG,
       'dist/index.d.mts': 'export type A = missing_ns.B;\n',
@@ -114,8 +114,8 @@ describe('declarationTypeErrors', () => {
     ]);
   });
 
-  it("leaves a dependency's own declarations to it", () => {
-    const root = fixture(
+  it("leaves a dependency's own declarations to it", async () => {
+    const root = await fixture(
       {
         'package.json': '{}',
         'tsconfig.json': FIXTURE_TSCONFIG,
@@ -128,10 +128,8 @@ describe('declarationTypeErrors', () => {
       },
       { link: ['typescript'] },
     );
-    // eslint-disable-next-line n/no-sync -- sync is fine in a script or bootstrap: a test writes its fixture
-    mkdirSync(join(root, 'src'), { recursive: true });
-    // eslint-disable-next-line n/no-sync -- sync is fine in a script or bootstrap: a test writes its fixture
-    writeFileSync(join(root, 'src/index.ts'), 'export {};\n');
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'src/index.ts'), 'export {};\n');
     expect(
       declarationTypeErrors(
         root,
@@ -142,8 +140,8 @@ describe('declarationTypeErrors', () => {
     ).toEqual([]);
   });
 
-  it('reads the declarations with the compiler options they were emitted under', () => {
-    const root = fixture(
+  it('reads the declarations with the compiler options they were emitted under', async () => {
+    const root = await fixture(
       {
         'package.json': '{}',
         'tsconfig.json': FIXTURE_TSCONFIG,

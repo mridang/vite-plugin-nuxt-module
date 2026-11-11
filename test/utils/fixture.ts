@@ -1,11 +1,11 @@
 import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  symlinkSync,
-  writeFileSync,
-} from 'node:fs';
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import nodePath from 'node:path';
 import type { RolldownWatcher } from 'rolldown';
@@ -40,32 +40,28 @@ export const FIXTURE_TSCONFIG = JSON.stringify({
  * `node_modules/`). Its root is the real path: Vite hands module ids over by it (macOS' tmpdir is
  * behind a symlink).
  */
-export function fixture(
+export async function fixture(
   files: Record<string, string>,
   options: { readonly link?: readonly string[] } = {},
-): string {
-  // eslint-disable-next-line n/no-sync -- shared test fixture: sync fs keeps its callers in other test files unchanged
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'vite-fixture-')));
+): Promise<string> {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'vite-fixture-')));
   for (const [name, text] of Object.entries(files)) {
-    // eslint-disable-next-line n/no-sync -- shared test fixture: sync fs keeps its callers in other test files unchanged
-    mkdirSync(dirname(join(root, name)), { recursive: true });
-    // eslint-disable-next-line n/no-sync -- shared test fixture: sync fs keeps its callers in other test files unchanged
-    writeFileSync(join(root, name), text);
+    await mkdir(dirname(join(root, name)), { recursive: true });
+    await writeFile(join(root, name), text);
   }
-  if (!options.link) {
-    // eslint-disable-next-line n/no-sync -- shared test fixture: sync fs keeps its callers in other test files unchanged
-    symlinkSync(OWN_NODE_MODULES, join(root, 'node_modules'), 'dir');
-    return root;
-  }
-  for (const name of options.link) {
-    // eslint-disable-next-line n/no-sync -- shared test fixture: sync fs keeps its callers in other test files unchanged
-    mkdirSync(dirname(join(root, 'node_modules', name)), { recursive: true });
-    // eslint-disable-next-line n/no-sync -- shared test fixture: sync fs keeps its callers in other test files unchanged
-    symlinkSync(
-      join(OWN_NODE_MODULES, name),
-      join(root, 'node_modules', name),
-      'dir',
-    );
+  if (options.link) {
+    for (const name of options.link) {
+      await mkdir(dirname(join(root, 'node_modules', name)), {
+        recursive: true,
+      });
+      await symlink(
+        join(OWN_NODE_MODULES, name),
+        join(root, 'node_modules', name),
+        'dir',
+      );
+    }
+  } else {
+    await symlink(OWN_NODE_MODULES, join(root, 'node_modules'), 'dir');
   }
   return root;
 }
@@ -108,9 +104,8 @@ export async function watchFixture(
 }
 
 /** A file of a fixture's build output, as text. */
-export function output(root: string, file: string): string {
-  // eslint-disable-next-line n/no-sync -- shared test fixture: sync fs keeps its callers in other test files unchanged
-  return readFileSync(join(root, file), 'utf8');
+export async function output(root: string, file: string): Promise<string> {
+  return readFile(join(root, file), 'utf8');
 }
 
 /**
@@ -118,26 +113,21 @@ export function output(root: string, file: string): string {
  * export (`default` or a name) creates `{ name: <package>, options }`, the options it was called
  * with. What a preset loads from the package it builds, without the real tool.
  */
-export function withTools(
+export async function withTools(
   pkg: Record<string, unknown>,
   tools: Readonly<Record<string, string>>,
-): string {
-  // eslint-disable-next-line n/no-sync -- shared test fixture: sync fs keeps its callers in other test files unchanged
-  const root = mkdtempSync(join(tmpdir(), 'vite-tools-'));
-  // eslint-disable-next-line n/no-sync -- shared test fixture: sync fs keeps its callers in other test files unchanged
-  writeFileSync(join(root, 'package.json'), JSON.stringify(pkg));
+): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'vite-tools-'));
+  await writeFile(join(root, 'package.json'), JSON.stringify(pkg));
   for (const [name, exportName] of Object.entries(tools)) {
     const dir = join(root, 'node_modules', name);
-    // eslint-disable-next-line n/no-sync -- shared test fixture: sync fs keeps its callers in other test files unchanged
-    mkdirSync(dir, { recursive: true });
-    // eslint-disable-next-line n/no-sync -- shared test fixture: sync fs keeps its callers in other test files unchanged
-    writeFileSync(
+    await mkdir(dir, { recursive: true });
+    await writeFile(
       join(dir, 'package.json'),
       JSON.stringify({ name, type: 'module', exports: './index.js' }),
     );
     const factory = `(options) => ({ name: ${JSON.stringify(name)}, options })`;
-    // eslint-disable-next-line n/no-sync -- shared test fixture: sync fs keeps its callers in other test files unchanged
-    writeFileSync(
+    await writeFile(
       join(dir, 'index.js'),
       exportName === 'default'
         ? `export default ${factory};\n`

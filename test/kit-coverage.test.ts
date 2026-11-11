@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import nodePath from 'node:path';
 // eslint-disable-next-line sonarjs/no-wildcard-import -- the test compares every export of @nuxt/kit, so the whole namespace is needed
 import * as kit from '@nuxt/kit';
@@ -8,9 +8,8 @@ import { FIXTURES } from './contract/paths.js';
 import { KIT_API } from './contract/kit-api.js';
 
 /** The names the fixture module imports from `@nuxt/kit`. */
-function importedFromKit(): string[] {
-  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-  const source = readFileSync(
+async function importedFromKit(): Promise<string[]> {
+  const source = await readFile(
     nodePath.join(FIXTURES, 'module/src/module.ts'),
     'utf8',
   );
@@ -30,12 +29,12 @@ describe('the @nuxt/kit API the contract covers', () => {
     );
   });
 
-  it('covers exactly the exports the fixture module imports', () => {
+  it('covers exactly the exports the fixture module imports', async () => {
     const covered = Object.entries(KIT_API)
       .filter(([, coverage]) => coverage === 'covered')
       .map(([name]) => name)
       .toSorted((a, b) => a.localeCompare(b));
-    expect(importedFromKit()).toEqual(covered);
+    expect(await importedFromKit()).toEqual(covered);
   });
 
   it.each(

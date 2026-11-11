@@ -1,7 +1,7 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import nodePath from 'node:path';
-import { describe, expect, it } from '@jest/globals';
+import { beforeAll, describe, expect, it } from '@jest/globals';
 
 import {
   declaredDependencies,
@@ -11,17 +11,15 @@ import {
   packageMatcher,
 } from '../src/externals.js';
 
-function packageRoot(pkg: Record<string, unknown>): string {
-  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-  const root = mkdtempSync(nodePath.join(tmpdir(), 'vite-externals-'));
-  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-  writeFileSync(nodePath.join(root, 'package.json'), JSON.stringify(pkg));
+async function packageRoot(pkg: Record<string, unknown>): Promise<string> {
+  const root = await mkdtemp(nodePath.join(tmpdir(), 'vite-externals-'));
+  await writeFile(nodePath.join(root, 'package.json'), JSON.stringify(pkg));
   return root;
 }
 
 describe('declaredDependencies', () => {
-  it('lists dependencies, peerDependencies and optionalDependencies but not devDependencies', () => {
-    const root = packageRoot({
+  it('lists dependencies, peerDependencies and optionalDependencies but not devDependencies', async () => {
+    const root = await packageRoot({
       dependencies: { a: '1' },
       peerDependencies: { b: '1' },
       optionalDependencies: { c: '1' },
@@ -60,9 +58,12 @@ describe('matchesAny', () => {
 });
 
 describe('moduleExternals', () => {
-  const root = packageRoot({
-    name: 'self-pkg',
-    dependencies: { lit: '1', dompurify: '1' },
+  let root: string;
+  beforeAll(async () => {
+    root = await packageRoot({
+      name: 'self-pkg',
+      dependencies: { lit: '1', dompurify: '1' },
+    });
   });
 
   it('lists the declared dependencies, the package itself, the extra matchers, then the builtins', () => {

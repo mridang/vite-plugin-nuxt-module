@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process';
 // eslint-disable-next-line n/no-unsupported-features/node-builtins -- experimental API used on purpose: test fixture copy, Node 22.0 floor
-import { cpSync } from 'node:fs';
-import { mkdir, readdir, rm } from 'node:fs/promises';
+import { cp, mkdir, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import ts from 'typescript';
 import { build } from 'vite';
@@ -60,9 +59,11 @@ export function run(
 }
 
 /** A copy of the fixture `name` in `into`. */
-export function copyFixture(name: 'module' | 'app', into: string): string {
-  // eslint-disable-next-line n/no-sync -- copyFixture is synchronous: callers use the returned path at once
-  cpSync(join(FIXTURES, name), into, { recursive: true });
+export async function copyFixture(
+  name: 'module' | 'app',
+  into: string,
+): Promise<string> {
+  await cp(join(FIXTURES, name), into, { recursive: true });
   return into;
 }
 

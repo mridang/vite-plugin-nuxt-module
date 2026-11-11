@@ -1,12 +1,11 @@
 import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+  mkdir,
+  mkdtemp,
+  readdir,
+  realpath,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import nodePath from 'node:path';
 import type { Logger, Plugin, UserConfig } from 'vite';
@@ -21,6 +20,7 @@ import {
 import { nuxtModule } from '../src/index.js';
 import { buildConfig } from '../src/plugin.js';
 import { resolveOptions } from '../src/options.js';
+import { pathExists } from './utils/fs.js';
 
 /** A fake `@nuxt/cli` whose prepare writes the `.nuxt/tsconfig.json` a real one would. */
 const fakeNuxtCli = {
@@ -42,11 +42,11 @@ const fakeNuxtCli = {
 const DEFAULT_FILES: Record<string, string> = { 'src/module.ts': '' };
 
 /** A module package: `src/module.ts` and an empty `src/runtime` unless `files` says otherwise. */
-function packageRoot(files: Record<string, string> = DEFAULT_FILES): string {
-  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-  const root = realpathSync(
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    mkdtempSync(nodePath.join(tmpdir(), 'nuxt-module-plugin-')),
+async function packageRoot(
+  files: Record<string, string> = DEFAULT_FILES,
+): Promise<string> {
+  const root = await realpath(
+    await mkdtemp(nodePath.join(tmpdir(), 'nuxt-module-plugin-')),
   );
   const all = {
     'package.json': JSON.stringify({ name: 'mod', type: 'module' }),
@@ -54,14 +54,13 @@ function packageRoot(files: Record<string, string> = DEFAULT_FILES): string {
     ...files,
   };
   for (const [path, content] of Object.entries(all)) {
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    mkdirSync(nodePath.dirname(nodePath.join(root, path)), { recursive: true });
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    writeFileSync(nodePath.join(root, path), content);
+    await mkdir(nodePath.dirname(nodePath.join(root, path)), {
+      recursive: true,
+    });
+    await writeFile(nodePath.join(root, path), content);
   }
   if ('src/module.ts' in files)
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    mkdirSync(nodePath.join(root, 'src/runtime'), { recursive: true });
+    await mkdir(nodePath.join(root, 'src/runtime'), { recursive: true });
   return root;
 }
 
@@ -103,7 +102,7 @@ describe('nuxtModule', () => {
 
 describe('the Vite config the plugin adds', () => {
   it('bundles the module as an ES entry for Node', async () => {
-    const root = packageRoot();
+    const root = await packageRoot();
     const config = await configFor(root);
     expect([
       config.build?.lib && config.build.lib.entry,
@@ -123,7 +122,7 @@ describe('the Vite config the plugin adds', () => {
   });
 
   it('bundles extra entries next to the module', async () => {
-    const root = packageRoot();
+    const root = await packageRoot();
     const config = await configFor(root, {
       entry: { server: 'src/server.ts' },
     });
@@ -134,12 +133,12 @@ describe('the Vite config the plugin adds', () => {
   });
 
   it('writes no source maps unless asked, like @nuxt/module-builder', async () => {
-    const config = await configFor(packageRoot());
+    const config = await configFor(await packageRoot());
     expect(config.build?.sourcemap).toBe(false);
   });
 
   it('names shared chunks like @nuxt/module-builder', async () => {
-    const config = await configFor(packageRoot());
+    const config = await configFor(await packageRoot());
     const output = config.build?.rolldownOptions?.output as {
       chunkFileNames: string;
     };
@@ -148,7 +147,7 @@ describe('the Vite config the plugin adds', () => {
 
   it("leaves the settings the project's own Vite config makes to it", async () => {
     const config = await configFor(
-      packageRoot(),
+      await packageRoot(),
       {},
       {
         build: {
@@ -169,18 +168,18 @@ describe('the Vite config the plugin adds', () => {
 
   it('keeps a logger the project set', async () => {
     const customLogger = {} as Logger;
-    const config = await configFor(packageRoot(), {}, { customLogger });
+    const config = await configFor(await packageRoot(), {}, { customLogger });
     expect(config.customLogger).toBeUndefined();
   });
 
   it('transpiles the module with its own tsconfig', async () => {
-    const root = packageRoot();
+    const root = await packageRoot();
     const config = await configFor(root);
     expect(config.tsconfig).toBe(nodePath.join(root, 'tsconfig.json'));
   });
 
   it('fails before the build when the module is not prepared, saying how to prepare it', async () => {
-    const root = packageRoot({
+    const root = await packageRoot({
       'src/module.ts': '',
       'tsconfig.json': '{ "extends": "./.nuxt/tsconfig.json" }',
     });
@@ -188,26 +187,26 @@ describe('the Vite config the plugin adds', () => {
   });
 
   it('prepares the module first when prepare is set', async () => {
-    const root = packageRoot({
+    const root = await packageRoot({
       'src/module.ts': '',
       'tsconfig.json': '{ "extends": "./.nuxt/tsconfig.json" }',
       ...fakeNuxtCli,
     });
     await configFor(root, { prepare: true });
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    expect(existsSync(nodePath.join(root, '.nuxt/tsconfig.json'))).toBe(true);
+    expect(await pathExists(nodePath.join(root, '.nuxt/tsconfig.json'))).toBe(
+      true,
+    );
   }, 30_000);
 
   it('needs no tsconfig for a build without declarations', async () => {
-    const root = packageRoot();
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    rmSync(nodePath.join(root, 'tsconfig.json'));
+    const root = await packageRoot();
+    await rm(nodePath.join(root, 'tsconfig.json'));
     const config = await configFor(root, { dts: false });
     expect(config.tsconfig).toBeUndefined();
   });
 
-  it('describes the same build whoever calls it', () => {
-    const root = packageRoot();
+  it('describes the same build whoever calls it', async () => {
+    const root = await packageRoot();
     const o = resolveOptions({}, root);
     const logger = {} as Logger;
     expect(
@@ -240,18 +239,18 @@ describe('nuxtModule builds', () => {
   const entry = { index: 'src/index.ts' };
 
   it('writes what @nuxt/module-builder writes', async () => {
-    const root = fixture(files);
+    const root = await fixture(files);
     await buildFixture(root, { entry });
+    const dist = await readdir(nodePath.join(root, 'dist'));
+    const composables = await readdir(
+      nodePath.join(root, 'dist/runtime/composables'),
+    );
     expect([
-      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-      readdirSync(nodePath.join(root, 'dist'))
+      dist
         .filter((f) => !f.endsWith('.map'))
         .toSorted((a, b) => a.localeCompare(b)),
-      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-      readdirSync(nodePath.join(root, 'dist/runtime/composables')).toSorted(
-        (a, b) => a.localeCompare(b),
-      ),
-      JSON.parse(output(root, 'dist/module.json')),
+      composables.toSorted((a, b) => a.localeCompare(b)),
+      JSON.parse(await output(root, 'dist/module.json')),
     ]).toEqual([
       [
         'index.d.mts',
@@ -271,18 +270,19 @@ describe('nuxtModule builds', () => {
   }, 60_000);
 
   it("writes into the outDir of the project's Vite config", async () => {
-    const root = fixture(files);
+    const root = await fixture(files);
     await buildFixture(root, { entry }, { build: { outDir: 'build/out' } });
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    expect(existsSync(nodePath.join(root, 'build/out/module.mjs'))).toBe(true);
+    expect(await pathExists(nodePath.join(root, 'build/out/module.mjs'))).toBe(
+      true,
+    );
   }, 60_000);
 
   it('writes .js entries and .d.ts declarations with extension .js', async () => {
-    const root = fixture(files);
+    const root = await fixture(files);
     await buildFixture(root, { entry, extension: '.js' });
+    const dist = await readdir(nodePath.join(root, 'dist'));
     expect(
-      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-      readdirSync(nodePath.join(root, 'dist'))
+      dist
         .filter((f) => !f.endsWith('.map'))
         .toSorted((a, b) => a.localeCompare(b)),
     ).toEqual([
@@ -296,7 +296,7 @@ describe('nuxtModule builds', () => {
   }, 60_000);
 
   it('writes no runtime after a build that fails on a warning Vite logs once the bundle is written', async () => {
-    const root = fixture(files);
+    const root = await fixture(files);
     let logger: Logger | undefined;
     const lateWarning: Plugin = {
       name: 'late-warning',
@@ -310,16 +310,15 @@ describe('nuxtModule builds', () => {
     await expect(
       buildFixture(root, { entry }, { plugins: [lateWarning] }),
     ).rejects.toThrow(/late warning/);
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    expect(existsSync(nodePath.join(root, 'dist/runtime'))).toBe(false);
+    expect(await pathExists(nodePath.join(root, 'dist/runtime'))).toBe(false);
   }, 60_000);
 
   it('gives runtime JS and declarations explicit .js specifiers', async () => {
-    const root = fixture(files);
+    const root = await fixture(files);
     await buildFixture(root, { entry });
     expect([
-      output(root, 'dist/runtime/composables/useThing.js'),
-      output(root, 'dist/runtime/composables/useThing.d.ts'),
+      await output(root, 'dist/runtime/composables/useThing.js'),
+      await output(root, 'dist/runtime/composables/useThing.d.ts'),
     ]).toEqual([
       expect.stringContaining('from "../lib/helper.js"'),
       expect.stringMatching(/["']\.\.\/lib\/helper\.js["']/),
@@ -327,15 +326,15 @@ describe('nuxtModule builds', () => {
   }, 60_000);
 
   it("types a bundled entry's .js import of a runtime file by importing it, not by copying it", async () => {
-    const root = fixture(files);
+    const root = await fixture(files);
     await buildFixture(root, { entry });
-    expect(output(root, 'dist/index.d.mts')).toMatch(
+    expect(await output(root, 'dist/index.d.mts')).toMatch(
       /from ["']\.\/runtime\/composables\/useThing\.js["']/,
     );
   }, 60_000);
 
   it('fails on a type error in the runtime', async () => {
-    const root = fixture({
+    const root = await fixture({
       ...files,
       'src/runtime/composables/useOther.ts':
         'export const useOther = (): number => "s";\n',
@@ -344,30 +343,32 @@ describe('nuxtModule builds', () => {
   }, 60_000);
 
   it('writes .d.ts copies of the bundled entries with dts.compatible', async () => {
-    const root = fixture(files);
+    const root = await fixture(files);
     await buildFixture(root, { dts: { compatible: true } });
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    expect(existsSync(nodePath.join(root, 'dist/module.d.ts'))).toBe(true);
+    expect(await pathExists(nodePath.join(root, 'dist/module.d.ts'))).toBe(
+      true,
+    );
   }, 60_000);
 
   it('writes no declarations with dts: false', async () => {
-    const root = fixture(files);
+    const root = await fixture(files);
     await buildFixture(root, { dts: false });
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    expect(existsSync(nodePath.join(root, 'dist/module.d.mts'))).toBe(false);
+    expect(await pathExists(nodePath.join(root, 'dist/module.d.mts'))).toBe(
+      false,
+    );
   }, 60_000);
 
   it('writes no runtime for a module without one', async () => {
-    const root = fixture(files);
+    const root = await fixture(files);
     await buildFixture(root, { runtimeDir: false });
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    expect(existsSync(nodePath.join(root, 'dist/runtime'))).toBe(false);
+    expect(await pathExists(nodePath.join(root, 'dist/runtime'))).toBe(false);
   }, 60_000);
 
   it('writes source maps when asked', async () => {
-    const root = fixture(files);
+    const root = await fixture(files);
     await buildFixture(root, { sourcemap: true });
-    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
-    expect(existsSync(nodePath.join(root, 'dist/module.mjs.map'))).toBe(true);
+    expect(await pathExists(nodePath.join(root, 'dist/module.mjs.map'))).toBe(
+      true,
+    );
   }, 60_000);
 });

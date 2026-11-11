@@ -13,17 +13,17 @@ afterEach(() => {
 });
 
 describe('vueTools', () => {
-  it("loads the TypeScript vue-tsc runs on, not the package's own copy", () => {
+  it("loads the TypeScript vue-tsc runs on, not the package's own copy", async () => {
     const vueTsc = createRequire(import.meta.url).resolve(
       'vue-tsc/package.json',
     );
-    expect(vueTools(fixture({ 'package.json': '{}' }))?.ts).toBe(
+    expect(vueTools(await fixture({ 'package.json': '{}' }))?.ts).toBe(
       createRequire(vueTsc)('typescript'),
     );
   });
 
-  it('creates a program that reads the .vue files the sources import', () => {
-    const root = fixture({
+  it('creates a program that reads the .vue files the sources import', async () => {
+    const root = await fixture({
       'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
       'tsconfig.json': JSON.stringify({
         ...JSON.parse(FIXTURE_TSCONFIG),
