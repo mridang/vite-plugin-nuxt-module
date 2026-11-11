@@ -254,3 +254,60 @@ describe('emitBundledTypes warnings', () => {
     ).rejects.toThrow(/OWN_CODE: careful/);
   }, 60_000);
 });
+
+describe('ASSET_IMPORT as rebuilt from its parts', () => {
+  const old = new RegExp(
+    [
+      String.raw`\?[a-z]+$`,
+      String.raw`\.(css|liquid|svg|png|jpe?g|gif|webp|woff2?)$`,
+      String.raw`\.module\.(css|scss|sass|less|styl|stylus|pcss|postcss|sss)$`,
+    ].join('|'),
+  );
+
+  it.each([
+    './x.css?inline',
+    './x.liquid',
+    './x.svg?react',
+    './x.module.scss',
+    './x.ts',
+    './x.module.ts',
+    'x?',
+    '',
+  ])('treats %j like the old pattern', (specifier) => {
+    expect(ASSET_IMPORT.test(specifier)).toBe(old.test(specifier));
+  });
+
+  it('matches the old pattern on seeded random specifiers', () => {
+    let state = 13;
+    const random = (): number => {
+      state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0;
+      return state / 2 ** 32;
+    };
+    const pieces = [
+      '.',
+      'css',
+      'scss',
+      'module',
+      'svg',
+      'png',
+      'jpg',
+      'jpeg',
+      '?',
+      'raw',
+      'x',
+      '/',
+    ];
+    for (let i = 0; i < 20_000; i += 1) {
+      let specifier = '';
+      for (let j = 0; j < 5; j += 1) {
+        specifier += pieces[Math.floor(random() * pieces.length)];
+      }
+      expect(ASSET_IMPORT.test(specifier)).toBe(old.test(specifier));
+    }
+  });
+
+  it('agrees on a long adversarial input', () => {
+    const specifier = `${'?a'.repeat(50_000)}.module.`;
+    expect(ASSET_IMPORT.test(specifier)).toBe(old.test(specifier));
+  });
+});

@@ -18,10 +18,18 @@ import {
 import { finishedDeclarations } from './rendered.js';
 import { selfReferenceOptions } from './self-reference.js';
 
+/** CSS module imports (`./x.module.css`): Vite turns them into an object of class names. */
+export const CSS_MODULE_IMPORT =
+  /\.module\.(css|scss|sass|less|styl|stylus|pcss|postcss|sss)$/;
+
 /** Imports with no types of their own (`./x.css?inline`, `./x.liquid`, `./x.svg?react`, `./x.module.scss`). */
-export const ASSET_IMPORT =
-  // eslint-disable-next-line sonarjs/regex-complexity -- one literal lists every asset format and CSS module extension, so the set reads in one place; splitting it scatters what counts as an asset
-  /\?[a-z]+$|\.(css|liquid|svg|png|jpe?g|gif|webp|woff2?)$|\.module\.(css|scss|sass|less|styl|stylus|pcss|postcss|sss)$/;
+export const ASSET_IMPORT = new RegExp(
+  [
+    String.raw`\?[a-z]+$`,
+    String.raw`\.(css|liquid|svg|png|jpe?g|gif|webp|woff2?)$`,
+    CSS_MODULE_IMPORT.source,
+  ].join('|'),
+);
 
 /**
  * Asset imports whose value is a string: an `?inline` / `?raw` / `?url` import, or a plain file
@@ -31,10 +39,6 @@ export const ASSET_IMPORT =
  */
 export const STRING_ASSET_IMPORT =
   /\?(?:inline|raw|url)$|(?<!\.module)\.(css|liquid|svg|png|jpe?g|gif|webp|woff2?)$/;
-
-/** CSS module imports (`./x.module.css`): Vite turns them into an object of class names. */
-export const CSS_MODULE_IMPORT =
-  /\.module\.(css|scss|sass|less|styl|stylus|pcss|postcss|sss)$/;
 
 /** The declaration of a string-valued asset module. */
 const STRING_ASSET_DECLARATION =
