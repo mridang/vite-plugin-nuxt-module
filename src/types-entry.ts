@@ -131,17 +131,17 @@ export function typesEntry(declaration: string, moduleFile: string): string {
     .filter((e) => e.star)
     .map((e) => `\nexport * from '${e.specifier ?? moduleFile}'`);
   const text = `
-  ${schemaImports.length ? `import type { ${schemaImports.join(', ')} } from '@nuxt/schema'` : ''}
+  ${schemaImports.length > 0 ? `import type { ${schemaImports.join(', ')} } from '@nuxt/schema'` : ''}
 
-${moduleImports.length ? `import type { ${moduleImports.join(', ')} } from '${moduleFile}'` : ''}
+${moduleImports.length > 0 ? `import type { ${moduleImports.join(', ')} } from '${moduleFile}'` : ''}
 
-${appShims.length ? `declare module '#app' {\n${appShims.join('\n')}\n}\n` : ''}
-${schemaShims.length ? `declare module '@nuxt/schema' {\n${schemaShims.join('\n')}\n}\n` : ''}
-${moduleExports.length ? `\n${moduleExports.join('\n')}` : ''}
+${appShims.length > 0 ? `declare module '#app' {\n${appShims.join('\n')}\n}\n` : ''}
+${schemaShims.length > 0 ? `declare module '@nuxt/schema' {\n${schemaShims.join('\n')}\n}\n` : ''}
+${moduleExports.length > 0 ? `\n${moduleExports.join('\n')}` : ''}
 ${named.join('')}
 ${stars.join('')}
 `;
-  return `${text.trim().replace(/[\n\r]{3,}/g, '\n\n')}\n`;
+  return `${text.trim().replaceAll(/[\n\r]{3,}/g, '\n\n')}\n`;
 }
 
 /**

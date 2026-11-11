@@ -81,9 +81,9 @@ export function moduleDeclarationOptions(
   const types = NUXT_HOISTED_TYPES.filter(
     (n) => !own.includes(n) && realPackageDirectory(n, root),
   );
-  if (types.length) result.types = [...own, ...types];
+  if (types.length > 0) result.types = [...own, ...types];
   const hoisted = hoistedTypePaths(root);
-  if (Object.keys(hoisted).length) {
+  if (Object.keys(hoisted).length > 0) {
     result.paths = { ...hoisted, ...absolutePaths(options, tsconfig) };
   }
   return result;

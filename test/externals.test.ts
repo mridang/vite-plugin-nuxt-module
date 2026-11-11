@@ -72,9 +72,9 @@ describe('moduleExternals', () => {
       list[3],
       String(list[4]),
     ]).toEqual([
-      '/^lit(\\/|$)/',
-      '/^dompurify(\\/|$)/',
-      '/^self-pkg(\\/|$)/',
+      String.raw`/^lit(\/|$)/`,
+      String.raw`/^dompurify(\/|$)/`,
+      String.raw`/^self-pkg(\/|$)/`,
       'extra',
       '/^node:/',
     ]);

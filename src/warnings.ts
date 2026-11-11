@@ -18,16 +18,14 @@ export interface BuildLog {
 }
 
 /** Log codes that are reports, not problems: never a failure. */
-const REPORT_CODES: readonly string[] = ['PLUGIN_TIMINGS'];
+const REPORT_CODES: ReadonlySet<string> = new Set(['PLUGIN_TIMINGS']);
 
 /** Whether `code` is a report or listed in `allow`. */
 export function isAllowed(
   code: string | undefined,
   allow: readonly string[],
 ): boolean {
-  return (
-    code !== undefined && (REPORT_CODES.includes(code) || allow.includes(code))
-  );
+  return code !== undefined && (REPORT_CODES.has(code) || allow.includes(code));
 }
 
 /**
@@ -94,7 +92,7 @@ export function failOnDeclarationWarnings(allow: readonly string[]) {
     log: T,
     handler: (level: L, log: T) => void,
   ): void => {
-    if (log.code && REPORT_CODES.includes(log.code)) return;
+    if (log.code && REPORT_CODES.has(log.code)) return;
     policy.onLog(level, log, handler);
   };
 }

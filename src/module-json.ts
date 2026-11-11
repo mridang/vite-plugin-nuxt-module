@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { version as viteVersion } from 'vite';
 
 import { MODULE_JSON } from './defaults.js';
@@ -17,10 +17,7 @@ interface ModuleExport {
 /** The `name` and `version` of this package, read from the manifest next to `src` / `dist`. */
 function ownPackage(): { readonly name: string; readonly version: string } {
   return JSON.parse(
-    readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'),
-      'utf8',
-    ),
+    readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8'),
   ) as {
     name: string;
     version: string;

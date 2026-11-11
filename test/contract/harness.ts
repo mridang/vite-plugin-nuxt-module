@@ -9,8 +9,6 @@ import '../utils/realm.js';
 
 import { FIXTURES, PACKAGE_ROOT } from './paths.js';
 
-export { PACKAGE_ROOT };
-
 /** The name the fixture module is published and installed under. */
 export const MODULE_NAME = 'hello-timing';
 
@@ -83,7 +81,7 @@ export async function packModule(
 ): Promise<string> {
   mkdirSync(into, { recursive: true });
   await run('npm', ['pack', '--pack-destination', into], { cwd: packageDir });
-  const [tarball] = readdirSync(into).filter((file) => file.endsWith('.tgz'));
+  const tarball = readdirSync(into).find((file) => file.endsWith('.tgz'));
   if (!tarball) throw new Error(`npm pack wrote no tarball into ${into}`);
   return join(into, tarball);
 }
@@ -154,3 +152,5 @@ export function typeErrors(appDir: string, file: string): string[] {
     .getPreEmitDiagnostics(program, source)
     .map((diagnostic) => ts.formatDiagnostic(diagnostic, host).trimEnd());
 }
+
+export { PACKAGE_ROOT } from './paths.js';

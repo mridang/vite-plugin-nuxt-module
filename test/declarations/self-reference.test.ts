@@ -12,14 +12,13 @@ function selfReferencing(
   tsconfig: Record<string, unknown> = {},
   files: Record<string, string> = {},
 ): string {
-  const root = fixture({
+  return fixture({
     'package.json': JSON.stringify({ name: 'pkg', exports: exportsMap }),
     'src/config.tsx': 'export default 1;',
     'src/index.ts': 'export { default as config } from "pkg/config";',
     'tsconfig.json': JSON.stringify(tsconfig),
     ...files,
   });
-  return root;
 }
 
 describe('typesTarget', () => {

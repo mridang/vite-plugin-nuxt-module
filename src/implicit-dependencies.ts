@@ -7,12 +7,9 @@ import { readPackageJson } from './package-json.js';
 
 /** The package a module id inside `node_modules` belongs to (`…/node_modules/@a/b/x.js` → `@a/b`). */
 export function nodeModulesPackage(id: string): string | undefined {
-  const path = id
-    .replace(/[?#].*$/, '')
-    .split('\\')
-    .join('/');
+  const path = id.replace(/[?#].*$/, '').replaceAll('\\', '/');
   const at = path.lastIndexOf('/node_modules/');
-  if (at < 0) return undefined;
+  if (at === -1) return undefined;
   const [scope = '', name = ''] = path
     .slice(at + '/node_modules/'.length)
     .split('/');

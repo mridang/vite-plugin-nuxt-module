@@ -172,7 +172,7 @@ export function packageTypeScript(root: string): typeof TypeScript {
  * whose build needs no type information need not install TypeScript for it.
  */
 export function anyTypeScript(root: string): typeof TypeScript {
-  return resolveFromRoot('typescript', root) !== undefined
-    ? packageTypeScript(root)
-    : (createRequire(import.meta.url)('typescript') as typeof TypeScript);
+  return resolveFromRoot('typescript', root) === undefined
+    ? (createRequire(import.meta.url)('typescript') as typeof TypeScript)
+    : packageTypeScript(root);
 }

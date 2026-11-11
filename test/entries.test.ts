@@ -39,7 +39,9 @@ describe('namedEntries', () => {
 
 describe('posixPath', () => {
   it('spells a Windows path the way Vite spells module ids', () => {
-    expect(posixPath('C:\\pkg\\src\\index.ts')).toBe('C:/pkg/src/index.ts');
+    expect(posixPath(String.raw`C:\pkg\src\index.ts`)).toBe(
+      'C:/pkg/src/index.ts',
+    );
   });
 });
 

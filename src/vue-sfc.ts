@@ -34,7 +34,7 @@ export interface LoaderOutput {
   readonly extension: string;
 }
 
-/** mkdist's `vueLoader`, as `vue-sfc-transformer` exports it. */
+/** Mkdist's `vueLoader`, as `vue-sfc-transformer` exports it. */
 export interface VueLoader {
   vueLoader(
     input: LoaderInput & { readonly path: string; readonly srcPath: string },
@@ -46,7 +46,7 @@ export interface VueLoader {
 }
 
 /**
- * mkdist's `loadFile` as `vue-sfc-transformer` calls it for the pieces of an SFC that are not `<script>`, for a module
+ * Mkdist's `loadFile` as `vue-sfc-transformer` calls it for the pieces of an SFC that are not `<script>`, for a module
  * at `root`:
  *
  * - each TypeScript expression of a `<template>` (`$attrs.x as string`) comes through as a `.ts` snippet and must come
@@ -93,7 +93,7 @@ export function dependencyChain(
 ): string[] {
   const dirs = [root];
   for (const name of chain) {
-    const from = dirs[dirs.length - 1] ?? root;
+    const from = dirs.at(-1) ?? root;
     const found =
       realPackageDirectory(name, from) ??
       (from === root ? undefined : realPackageDirectory(name, root));

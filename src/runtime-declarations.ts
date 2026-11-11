@@ -85,7 +85,7 @@ export function declarationCompilerOptions(
 }
 
 /** TypeScript's "cannot find module" diagnostics: an import whose types a declaration would lose to `any`. */
-const UNRESOLVED_MODULE_CODES: readonly number[] = [2307, 2792];
+const UNRESOLVED_MODULE_CODES: ReadonlySet<number> = new Set([2307, 2792]);
 
 /**
  * `.d.ts` for the transpiled runtime, emitted in process like `mkdist` does: one program over the runtime's scripts
@@ -104,15 +104,16 @@ export async function emitRuntimeDeclarations(
 ): Promise<void> {
   const out = join(o.outDir, RUNTIME_OUT_DIR);
   const tsconfig = effectiveTsconfig(o.root, o.tsconfig);
-  const vue = vues.length
-    ? requiredVueTools(
-        o.root,
-        `nuxtModule: the runtime has .vue files (${vues.map((f) => relative(o.runtimeDir, f)).join(', ')}) to type`,
-      )
-    : undefined;
+  const vue =
+    vues.length > 0
+      ? requiredVueTools(
+          o.root,
+          `nuxtModule: the runtime has .vue files (${vues.map((f) => relative(o.runtimeDir, f)).join(', ')}) to type`,
+        )
+      : undefined;
   const ts = vue?.ts ?? packageTypeScript(o.root);
   const inputs = [...scripts, ...vues].map((f) => resolve(f));
-  if (inputs.length) {
+  if (inputs.length > 0) {
     const project = parsedTsconfig(ts, tsconfig);
     const options = declarationCompilerOptions(project.options);
     const ambient = project.fileNames.filter((f) => /\.d\.[cm]?ts$/.test(f));
@@ -132,10 +133,10 @@ export async function emitRuntimeDeclarations(
       return file
         ? program
             .getSemanticDiagnostics(file)
-            .filter((d) => UNRESOLVED_MODULE_CODES.includes(d.code))
+            .filter((d) => UNRESOLVED_MODULE_CODES.has(d.code))
         : [];
     });
-    if (unresolved.length)
+    if (unresolved.length > 0)
       throw new Error(
         `nuxtModule: the runtime imports modules TypeScript cannot resolve, whose types its declarations would lose:\n${ts.formatDiagnostics(unresolved, host)}Run \`nuxi prepare\` (or set \`prepare: true\`) with a tsconfig that extends .nuxt/tsconfig.json, or declare them in the tsconfig's files.`,
       );
@@ -145,7 +146,7 @@ export async function emitRuntimeDeclarations(
     const failures = result.diagnostics.filter(
       (d) => d.file && own.has(resolve(d.file.fileName)),
     );
-    if (failures.length)
+    if (failures.length > 0)
       throw new Error(
         `nuxtModule: cannot emit declarations for the runtime:\n${ts.formatDiagnostics(failures, host)}`,
       );

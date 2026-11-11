@@ -8,7 +8,6 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type { RolldownWatcher } from 'rolldown';
 import { build, type UserConfig } from 'vite';
 
@@ -16,10 +15,7 @@ import './realm.js';
 import { type NuxtModuleOptions, nuxtModule } from '../../src/index.js';
 
 /** This package's own `node_modules`, which every fixture links so it resolves the build tools. */
-const OWN_NODE_MODULES = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  '../../node_modules',
-);
+const OWN_NODE_MODULES = resolve(import.meta.dirname, '../../node_modules');
 
 /** A compiler setup the declaration steps of a fixture can type with. */
 export const FIXTURE_TSCONFIG = JSON.stringify({

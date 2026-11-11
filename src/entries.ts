@@ -5,7 +5,7 @@ export type EntryOption = readonly string[] | Readonly<Record<string, string>>;
 
 /** The output name of an entry listed by file: its file name without directory or extension. */
 export function entryName(file: string): string {
-  return file.replace(/^.*\/|\.[^.]+$/g, '');
+  return file.replaceAll(/^.*\/|\.[^.]+$/g, '');
 }
 
 /**
@@ -33,7 +33,7 @@ export function namedEntries(entry: EntryOption): Record<string, string> {
  * built with `node:path` (backslashes on Windows) compares equal to the id of the same file.
  */
 export function posixPath(path: string): string {
-  return path.replace(/\\/g, '/');
+  return path.replaceAll('\\', '/');
 }
 
 /** The same entries with their files resolved against `root`, spelled like Vite's module ids. */

@@ -7,7 +7,7 @@ export type Matcher = string | RegExp;
 
 /** `text` with every regular-expression metacharacter escaped. */
 export function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  return text.replaceAll(/[.*+?^${}()|[\]\\/]/g, String.raw`\$&`);
 }
 
 /** Matches a package name and every subpath of it (`lit`, `lit/decorators.js`), but not `lit-html`. */

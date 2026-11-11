@@ -63,9 +63,9 @@ function declarationAssets(): RolldownPlugin {
       if (!ASSET_IMPORT.test(id)) return null;
       const suffix = STRING_ASSET_IMPORT.test(id)
         ? '.asset.d.ts'
-        : CSS_MODULE_IMPORT.test(id)
+        : (CSS_MODULE_IMPORT.test(id)
           ? '.classes.d.ts'
-          : undefined;
+          : undefined);
       if (!suffix || !importer) return { id, external: true };
       return {
         id: `${resolve(dirname(importer), id.replace(/\?.*$/, ''))}${suffix}`,
@@ -102,7 +102,7 @@ export interface BundledTypesOptions {
   eager?: boolean;
   /** Same allow-list as the JS build: a declaration warning fails the build unless its code is listed. */
   allowWarnings?: readonly string[];
-  /** Extra rolldown plugins that run before the declaration step (e.g. to externalize files built another way). */
+  /** Extra rolldown plugins that run before the declaration step (e.g. To externalize files built another way). */
   plugins?: readonly RolldownPlugin[];
   /** Hand `tsconfig` to rolldown too, instead of letting it discover the nearest one next to each file. */
   pinTsconfig?: boolean;
