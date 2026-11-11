@@ -39,6 +39,7 @@ export function implicitDependencies(options: () => ResolvedOptions): Plugin {
       if (matchesAny(name, bundle) || name === readPackageJson(root).name)
         return;
       reported.add(name);
+      // eslint-disable-next-line unicorn/no-this-outside-of-class -- Rollup plugin hooks receive their context (this.warn) as `this`
       this.warn({
         code: IMPLICIT_DEPENDENCY,
         message: `Implicitly bundling "${name}" into the module: it is not one of the module's dependencies or peerDependencies. Declare it, or list it in \`bundle\` to inline it on purpose.`,

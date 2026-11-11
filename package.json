@@ -15,6 +15,14 @@
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "sideEffects": true,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "keywords": [
     "vite",
     "vite-plugin",
@@ -110,6 +118,7 @@
     "prettier": "^3.9.10",
     "publint": "^0.3.25",
     "sass": "^1.106.1",
+    "sass-embedded": "^1.108.2",
     "semantic-release": "^25.0.1",
     "ts-jest": "^29.4.0",
     "typescript": "~6.0.3",

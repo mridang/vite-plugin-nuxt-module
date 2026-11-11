@@ -42,6 +42,7 @@ export function absolutePaths(
   tsconfig: string,
 ): Record<string, string[]> {
   const base =
+    // eslint-disable-next-line sonarjs/deprecation -- user tsconfigs may still set baseUrl and it must keep resolving paths
     options.baseUrl ??
     (options.pathsBasePath as string | undefined) ??
     dirname(tsconfig);
