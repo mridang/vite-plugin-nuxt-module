@@ -92,16 +92,18 @@ export function sfcSnippetLoader(
 export function dependencyChain(
   root: string,
   chain: readonly string[],
-): string[] {
-  const dirs = [root];
-  for (const name of chain) {
-    const from = dirs.at(-1) ?? root;
-    const found =
-      realPackageDirectory(name, from) ??
-      (from === root ? undefined : realPackageDirectory(name, root));
-    if (found) dirs.push(found);
-  }
-  return dirs;
+): Promise<string[]> {
+  return chain.reduce<Promise<string[]>>(
+    async (previous, name) => {
+      const dirs = await previous;
+      const from = dirs.at(-1) ?? root;
+      const found =
+        (await realPackageDirectory(name, from)) ??
+        (from === root ? undefined : await realPackageDirectory(name, root));
+      return found ? [...dirs, found] : dirs;
+    },
+    Promise.resolve([root]),
+  );
 }
 
 const vueLoaderCache = new Map<string, Promise<VueLoader>>();
@@ -117,7 +119,7 @@ export function vueTransformer(root: string): Promise<VueLoader> {
   if (!loader) {
     loader = (async () => {
       const errors: string[] = [];
-      for (const base of dependencyChain(root, SFC_TRANSFORMER_CHAIN)) {
+      for (const base of await dependencyChain(root, SFC_TRANSFORMER_CHAIN)) {
         try {
           return await importFromRoot<VueLoader>(SFC_TRANSFORMER, base);
         } catch (error) {

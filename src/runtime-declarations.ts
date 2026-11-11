@@ -110,12 +110,12 @@ export async function emitRuntimeDeclarations(
   const tsconfig = await effectiveTsconfig(o.root, o.tsconfig);
   const vue =
     vues.length > 0
-      ? requiredVueTools(
+      ? await requiredVueTools(
           o.root,
           `nuxtModule: the runtime has .vue files (${vues.map((f) => relative(o.runtimeDir, f)).join(', ')}) to type`,
         )
       : undefined;
-  const ts = vue?.ts ?? packageTypeScript(o.root);
+  const ts = vue?.ts ?? (await packageTypeScript(o.root));
   const inputs = [...scripts, ...vues].map((f) => resolve(f));
   if (inputs.length > 0) {
     const project = parsedTsconfig(ts, tsconfig);

@@ -25,7 +25,7 @@ describe('parsedTsconfig', () => {
         compilerOptions: {},
       }),
     });
-    const ts = packageTypeScript(root);
+    const ts = await packageTypeScript(root);
     const { options } = parsedTsconfig(ts, join(root, 'tsconfig.json'), {
       noEmit: true,
     });
@@ -39,7 +39,8 @@ describe('parsedTsconfig', () => {
   it('fails on a tsconfig it cannot read, naming it', async () => {
     const root = await fixture({ 'package.json': '{}' });
     const tsconfig = join(root, 'missing.json');
-    expect(() => parsedTsconfig(packageTypeScript(root), tsconfig)).toThrow(
+    const ts = await packageTypeScript(root);
+    expect(() => parsedTsconfig(ts, tsconfig)).toThrow(
       `cannot read ${tsconfig}`,
     );
   });
@@ -57,7 +58,7 @@ describe('absolutePaths', () => {
         compilerOptions: { baseUrl: './lib', paths: { 'b/*': ['b/*'] } },
       }),
     });
-    const ts = packageTypeScript(root);
+    const ts = await packageTypeScript(root);
     const paths = (name: string) =>
       absolutePaths(
         parsedTsconfig(ts, join(root, name)).options,

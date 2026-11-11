@@ -24,7 +24,7 @@ describe('sourceTypeErrors', () => {
       'tsconfig.json': FIXTURE_TSCONFIG,
       'src/index.ts': 'export const x: number = "s";\n',
     });
-    expect(sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual([
+    expect(await sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual([
       expect.stringMatching(/^src\/index\.ts\(1,14\): error TS2322/),
     ]);
   });
@@ -35,7 +35,9 @@ describe('sourceTypeErrors', () => {
       'tsconfig.json': FIXTURE_TSCONFIG,
       'src/index.ts': 'export const x: number = 1;\n',
     });
-    expect(sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual([]);
+    expect(await sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual(
+      [],
+    );
   });
 
   it('reports an option error, as tsc -p does', async () => {
@@ -47,7 +49,7 @@ describe('sourceTypeErrors', () => {
       }),
       'src/index.ts': 'export const x: number = 1;\n',
     });
-    expect(sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual([
+    expect(await sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual([
       expect.stringMatching(/TS2688/),
     ]);
   });
@@ -60,7 +62,9 @@ describe('sourceTypeErrors', () => {
       'src/index.test.ts': 'describe("x", () => {});\n',
       'src/__tests__/helper.ts': 'expect(1);\n',
     });
-    expect(sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual([]);
+    expect(await sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual(
+      [],
+    );
   });
 
   it('checks under the compiler options the declarations are emitted with', async () => {
@@ -76,7 +80,7 @@ describe('sourceTypeErrors', () => {
       { link: ['typescript'] },
     );
     expect(
-      sourceTypeErrors(root, join(root, 'tsconfig.json'), {
+      await sourceTypeErrors(root, join(root, 'tsconfig.json'), {
         overrides: { paths: { schema: [join(root, 'vendor/schema')] } },
       }),
     ).toEqual([]);
@@ -103,7 +107,7 @@ describe('declarationTypeErrors', () => {
       'dist/index.d.mts': 'export type A = missing_ns.B;\n',
     });
     expect(
-      declarationTypeErrors(
+      await declarationTypeErrors(
         root,
         join(root, 'tsconfig.json'),
         join(root, 'dist'),
@@ -131,7 +135,7 @@ describe('declarationTypeErrors', () => {
     await mkdir(join(root, 'src'), { recursive: true });
     await writeFile(join(root, 'src/index.ts'), 'export {};\n');
     expect(
-      declarationTypeErrors(
+      await declarationTypeErrors(
         root,
         join(root, 'tsconfig.json'),
         join(root, 'dist'),
@@ -151,7 +155,7 @@ describe('declarationTypeErrors', () => {
       { link: ['typescript'] },
     );
     expect(
-      declarationTypeErrors(
+      await declarationTypeErrors(
         root,
         join(root, 'tsconfig.json'),
         join(root, 'dist'),

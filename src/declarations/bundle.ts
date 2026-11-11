@@ -155,7 +155,7 @@ export async function emitBundledTypes(
     selfReference.compilerOptions,
     o.compilerOptions,
   );
-  const sourceErrors = sourceTypeErrors(o.root, o.tsconfig, {
+  const sourceErrors = await sourceTypeErrors(o.root, o.tsconfig, {
     overrides: compilerOptions,
     sourceRoot,
   });
@@ -205,7 +205,7 @@ export async function emitBundledTypes(
   }
   await bundle.close();
   // Read with the options they were emitted under: the `paths` / `types` a framework hoists for its consumers.
-  const errors = declarationTypeErrors(
+  const errors = await declarationTypeErrors(
     o.root,
     o.tsconfig,
     o.outDir,

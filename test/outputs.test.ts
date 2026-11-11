@@ -142,9 +142,8 @@ function errorLogger(errors: string[]): Logger {
 describe('hoistedTypePaths', () => {
   it('maps @nuxt/schema to the copy @nuxt/kit has when the module cannot resolve it', async () => {
     const root = await tree(starterModule);
-    expect(hoistedTypePaths(root)['@nuxt/schema']).toEqual([
-      nodePath.join(root, schemaInKit),
-    ]);
+    const hoisted = await hoistedTypePaths(root);
+    expect(hoisted['@nuxt/schema']).toEqual([nodePath.join(root, schemaInKit)]);
   });
 
   it("maps @nuxt/schema to the module's own copy when it has one", async () => {
@@ -154,13 +153,16 @@ describe('hoistedTypePaths', () => {
         name: '@nuxt/schema',
       }),
     });
-    expect(hoistedTypePaths(root)['@nuxt/schema']).toEqual([
+    const hoisted = await hoistedTypePaths(root);
+    expect(hoisted['@nuxt/schema']).toEqual([
       nodePath.join(root, 'node_modules/@nuxt/schema'),
     ]);
   });
 
   it('maps nothing for a module without Nuxt packages', async () => {
-    expect(hoistedTypePaths(await tree({ 'package.json': '{}' }))).toEqual({});
+    expect(
+      await hoistedTypePaths(await tree({ 'package.json': '{}' })),
+    ).toEqual({});
   });
 
   it('maps #app/nuxt into the installed nuxt, like nuxt-module-build', async () => {
@@ -168,7 +170,8 @@ describe('hoistedTypePaths', () => {
       'package.json': '{}',
       'node_modules/nuxt/package.json': '{}',
     });
-    expect(hoistedTypePaths(root)['#app/nuxt']).toEqual([
+    const hoisted = await hoistedTypePaths(root);
+    expect(hoisted['#app/nuxt']).toEqual([
       nodePath.join(root, 'node_modules/nuxt/dist/app/nuxt'),
     ]);
   });
@@ -183,18 +186,20 @@ describe('moduleDeclarationOptions', () => {
         name: '@nuxt/schema',
       }),
     });
-    expect(
-      moduleDeclarationOptions(root, nodePath.join(root, 'tsconfig.json'))
-        .types,
-    ).toEqual(['node', '@nuxt/schema']);
+    const options = await moduleDeclarationOptions(
+      root,
+      nodePath.join(root, 'tsconfig.json'),
+    );
+    expect(options.types).toEqual(['node', '@nuxt/schema']);
   });
 
   it('adds no types the module cannot resolve', async () => {
     const root = await tree(starterModule);
-    expect(
-      moduleDeclarationOptions(root, nodePath.join(root, 'tsconfig.json'))
-        .types,
-    ).toBeUndefined();
+    const options = await moduleDeclarationOptions(
+      root,
+      nodePath.join(root, 'tsconfig.json'),
+    );
+    expect(options.types).toBeUndefined();
   });
 
   it("keeps the tsconfig's own paths, made absolute, next to the hoisted ones", async () => {
@@ -204,10 +209,11 @@ describe('moduleDeclarationOptions', () => {
         compilerOptions: { paths: { '~/*': ['./src/*'] } },
       }),
     });
-    expect(
-      moduleDeclarationOptions(root, nodePath.join(root, 'tsconfig.json'))
-        .paths?.['~/*'],
-    ).toEqual([nodePath.join(root, 'src/*')]);
+    const options = await moduleDeclarationOptions(
+      root,
+      nodePath.join(root, 'tsconfig.json'),
+    );
+    expect(options.paths?.['~/*']).toEqual([nodePath.join(root, 'src/*')]);
   });
 });
 

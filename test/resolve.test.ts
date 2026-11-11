@@ -142,14 +142,14 @@ describe('realPackageDirectory', () => {
         exports: { '.': './index.js' },
       }),
     });
-    expect(realPackageDirectory('hidden', root)).toBe(
+    expect(await realPackageDirectory('hidden', root)).toBe(
       await realpath(nodePath.join(root, 'node_modules/hidden')),
     );
   });
 
   it('returns undefined for a package that is not installed', async () => {
     expect(
-      realPackageDirectory(
+      await realPackageDirectory(
         'missing-tool',
         await tree({ 'package.json': '{}' }),
       ),
@@ -160,13 +160,16 @@ describe('realPackageDirectory', () => {
 describe('resolveFromRoot', () => {
   it('returns undefined for a package that is not installed', async () => {
     expect(
-      resolveFromRoot('missing-tool', await tree({ 'package.json': '{}' })),
+      await resolveFromRoot(
+        'missing-tool',
+        await tree({ 'package.json': '{}' }),
+      ),
     ).toBeUndefined();
   });
 
   it('finds the package.json of a package that does not export it', async () => {
     const root = await esmTool({ import: './i.js' }, {});
-    expect(resolveFromRoot('esm-tool/package.json', root)).toBe(
+    expect(await resolveFromRoot('esm-tool/package.json', root)).toBe(
       nodePath.join(root, 'node_modules/esm-tool/package.json'),
     );
   });
@@ -182,8 +185,8 @@ describe('packageDirectory', () => {
     process.env.NODE_PATH = nodePath.join(root, 'elsewhere');
     try {
       expect([
-        packageDirectory('up-tool', nodePath.join(root, 'pkg')),
-        packageDirectory('missing-tool', nodePath.join(root, 'pkg')),
+        await packageDirectory('up-tool', nodePath.join(root, 'pkg')),
+        await packageDirectory('missing-tool', nodePath.join(root, 'pkg')),
       ]).toEqual([nodePath.join(root, 'node_modules/up-tool'), undefined]);
     } finally {
       process.env.NODE_PATH = previous;
@@ -193,9 +196,8 @@ describe('packageDirectory', () => {
 
 describe('anyTypeScript', () => {
   it("falls back to this package's TypeScript for a package without its own", async () => {
-    expect(anyTypeScript(await tree({ 'package.json': '{}' })).version).toBe(
-      ts.version,
-    );
+    const fallback = await anyTypeScript(await tree({ 'package.json': '{}' }));
+    expect(fallback.version).toBe(ts.version);
   });
 
   it("loads the package's own TypeScript when it has one", async () => {
@@ -208,6 +210,7 @@ describe('anyTypeScript', () => {
       'node_modules/typescript/ts.js':
         'module.exports = { version: "0.0.0-own" };',
     });
-    expect(anyTypeScript(root).version).toBe('0.0.0-own');
+    const own = await anyTypeScript(root);
+    expect(own.version).toBe('0.0.0-own');
   });
 });

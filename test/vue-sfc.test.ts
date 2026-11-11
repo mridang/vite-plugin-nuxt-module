@@ -57,7 +57,7 @@ describe('dependencyChain', () => {
       'node_modules/builder/package.json': '{}',
       'node_modules/builder/node_modules/inner/package.json': '{}',
     });
-    expect(dependencyChain(root, ['builder', 'inner'])).toEqual([
+    expect(await dependencyChain(root, ['builder', 'inner'])).toEqual([
       root,
       join(root, 'node_modules/builder'),
       join(root, 'node_modules/builder/node_modules/inner'),
@@ -69,7 +69,7 @@ describe('dependencyChain', () => {
       'package.json': '{}',
       'node_modules/inner/package.json': '{}',
     });
-    expect(dependencyChain(root, ['missing', 'inner'])).toEqual([
+    expect(await dependencyChain(root, ['missing', 'inner'])).toEqual([
       root,
       join(root, 'node_modules/inner'),
     ]);

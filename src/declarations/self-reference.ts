@@ -100,7 +100,7 @@ export async function selfReferenceOptions(
   );
   const own = (await exists(tsconfig))
     ? absolutePaths(
-        parsedTsconfig(packageTypeScript(root), tsconfig).options,
+        parsedTsconfig(await packageTypeScript(root), tsconfig).options,
         tsconfig,
       )
     : {};

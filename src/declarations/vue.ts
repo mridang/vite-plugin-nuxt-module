@@ -48,8 +48,8 @@ export interface VueTools {
  * declarations and their type check use this one copy, so a `.vue` file is never read by two
  * versions.
  */
-export function vueTools(root: string): VueTools | undefined {
-  let vueTscDir = realPackageDirectory('vue-tsc', root);
+export async function vueTools(root: string): Promise<VueTools | undefined> {
+  let vueTscDir = await realPackageDirectory('vue-tsc', root);
   if (vueTscDir === undefined) {
     try {
       vueTscDir = path.dirname(
@@ -84,8 +84,11 @@ export function vueTools(root: string): VueTools | undefined {
 }
 
 /** {@link vueTools}, or a failure naming what to install for `what`. */
-export function requiredVueTools(root: string, what: string): VueTools {
-  const tools = vueTools(root);
+export async function requiredVueTools(
+  root: string,
+  what: string,
+): Promise<VueTools> {
+  const tools = await vueTools(root);
   if (!tools) throw new Error(`${what}; install vue-tsc`);
   return tools;
 }

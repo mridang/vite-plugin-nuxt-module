@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { NUXT_BUILD_DIR, PROJECT_TSCONFIG } from './defaults.js';
-import { exists } from './exists.js';
+import { exists, firstFound } from './exists.js';
 import { anyTypeScript } from './resolve.js';
 import { packageTsconfig, type TS } from './tsconfig.js';
 
@@ -15,18 +15,6 @@ const isFile = (p: string): Promise<boolean> =>
   stat(p)
     .then((info) => info.isFile())
     .catch(() => false);
-
-/**
- * The first result of `check` over `items`, in order, running each only when the ones before it found nothing.
- */
-const firstFound = <T, R>(
-  items: readonly T[],
-  check: (item: T) => Promise<R | undefined>,
-): Promise<R | undefined> =>
-  items.reduce<Promise<R | undefined>>(
-    async (previous, item) => (await previous) ?? check(item),
-    Promise.resolve(undefined),
-  );
 
 /**
  * The first file `file` extends or references by path (recursively) that does not exist, or `undefined` when the
@@ -96,7 +84,7 @@ export async function effectiveTsconfig(
   const base = await packageTsconfig(root, tsconfig);
   if (!base)
     throw new Error(`nuxtModule: no tsconfig found in ${root} or above it`);
-  const missing = await missingTsconfigFile(anyTypeScript(root), base);
+  const missing = await missingTsconfigFile(await anyTypeScript(root), base);
   if (missing) throw new Error(brokenTsconfigMessage(root, base, missing));
   return base;
 }

@@ -85,13 +85,13 @@ export interface SourceCheckOptions {
  * (`overrides`: the `paths` / `types` a framework hoists), since a tsconfig that sets `declaration`
  * adds the declaration diagnostics those options decide.
  */
-export function sourceTypeErrors(
+export async function sourceTypeErrors(
   root: string,
   tsconfig: string,
   options: SourceCheckOptions = {},
-): string[] {
+): Promise<string[]> {
   const { overrides, sourceRoot = SOURCE_ROOT } = options;
-  const ts = packageTypeScript(root);
+  const ts = await packageTypeScript(root);
   const project = checkedProject(ts, tsconfig, overrides);
   const program = ts.createProgram({
     rootNames: project.fileNames.filter(
@@ -113,15 +113,15 @@ export function sourceTypeErrors(
  * inside `outDir` count: the dependencies' own declarations are theirs to check. `overrides` are
  * the compiler options the declarations were emitted with on top of the tsconfig's.
  */
-export function declarationTypeErrors(
+export async function declarationTypeErrors(
   root: string,
   tsconfig: string,
   outDir: string,
   files: readonly string[],
   overrides: CompilerOverrides = {},
-): string[] {
+): Promise<string[]> {
   if (files.length === 0) return [];
-  const ts = packageTypeScript(root);
+  const ts = await packageTypeScript(root);
   const { options } = checkedProject(ts, tsconfig, overrides);
   const emitOptions: CompilerOptions = { ...options, skipLibCheck: false };
   delete emitOptions.rootDir;
