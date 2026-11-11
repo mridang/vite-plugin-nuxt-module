@@ -1,7 +1,8 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseSync } from 'vite';
 
+import { exists } from './exists.js';
 import { namesFile } from './package-json.js';
 
 const { join } = path;
@@ -150,21 +151,18 @@ ${stars.join('')}
  * Writes `types.d.mts` (`types.d.ts` for a `.js` build) next to the module, when the manifest of the
  * package at `root` names it (see `namesFile`) and the module does not ship its own.
  */
-export function writeTypesEntry(
+export async function writeTypesEntry(
   root: string,
   outDir: string,
   extension: string,
-): void {
+): Promise<void> {
   const mjs = extension === '.mjs';
   // Paired with the module's own declaration extension: `module.mjs` → `types.d.mts`, `module.js` → `types.d.ts`.
   const file = join(outDir, mjs ? 'types.d.mts' : 'types.d.ts');
-  // eslint-disable-next-line n/no-sync -- writeTypesEntry is synchronous: outputs.ts calls it from its sync declaration step
-  if (existsSync(file) || !namesFile(root, file)) return;
-  // eslint-disable-next-line n/no-sync -- writeTypesEntry is synchronous: outputs.ts calls it from its sync declaration step
-  const declaration = readFileSync(
+  if ((await exists(file)) || !namesFile(root, file)) return;
+  const declaration = await readFile(
     join(outDir, mjs ? 'module.d.mts' : 'module.d.ts'),
     'utf8',
   );
-  // eslint-disable-next-line n/no-sync -- writeTypesEntry is synchronous: outputs.ts calls it from its sync declaration step
-  writeFileSync(file, typesEntry(declaration, `./module${extension}`));
+  await writeFile(file, typesEntry(declaration, `./module${extension}`));
 }

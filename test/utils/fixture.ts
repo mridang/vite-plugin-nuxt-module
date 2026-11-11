@@ -11,14 +11,14 @@ import nodePath from 'node:path';
 import type { RolldownWatcher } from 'rolldown';
 import { build, type UserConfig } from 'vite';
 
+import { PACKAGE_ROOT } from '../contract/paths.js';
 import './realm.js';
 import { type NuxtModuleOptions, nuxtModule } from '../../src/index.js';
 
-const { dirname, join, resolve } = nodePath;
+const { dirname, join } = nodePath;
 
 /** This package's own `node_modules`, which every fixture links so it resolves the build tools. */
-// eslint-disable-next-line n/no-unsupported-features/node-builtins -- experimental API used on purpose
-const OWN_NODE_MODULES = resolve(import.meta.dirname, '../../node_modules');
+const OWN_NODE_MODULES = join(PACKAGE_ROOT, 'node_modules');
 
 /** A compiler setup the declaration steps of a fixture can type with. */
 export const FIXTURE_TSCONFIG = JSON.stringify({

@@ -1,11 +1,11 @@
 import { spawn } from 'node:child_process';
-// eslint-disable-next-line n/no-unsupported-features/node-builtins -- experimental API used on purpose: test fixture copy, Node 22.0 floor
-import { cp, mkdir, readdir, rm } from 'node:fs/promises';
+import { mkdir, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import ts from 'typescript';
 import { build } from 'vite';
 
 import nuxtModule from '../../src/index.js';
+import { copyDirectory } from '../utils/fs.js';
 import '../utils/realm.js';
 
 import { FIXTURES, PACKAGE_ROOT } from './paths.js';
@@ -63,7 +63,7 @@ export async function copyFixture(
   name: 'module' | 'app',
   into: string,
 ): Promise<string> {
-  await cp(join(FIXTURES, name), into, { recursive: true });
+  await copyDirectory(join(FIXTURES, name), into);
   return into;
 }
 

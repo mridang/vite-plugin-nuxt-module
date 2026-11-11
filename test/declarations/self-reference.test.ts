@@ -44,7 +44,7 @@ describe('selfReferenceOptions', () => {
         default: './dist/config.js',
       },
     });
-    const options = selfReferenceOptions(
+    const options = await selfReferenceOptions(
       root,
       join(root, 'dist/types'),
       join(root, 'src'),
@@ -61,7 +61,7 @@ describe('selfReferenceOptions', () => {
       {},
       { 'src/cfg/main.ts': 'export default 1;' },
     );
-    const options = selfReferenceOptions(
+    const options = await selfReferenceOptions(
       root,
       join(root, 'dist'),
       join(root, 'src'),
@@ -77,7 +77,7 @@ describe('selfReferenceOptions', () => {
     const root = await selfReferencing({
       './config': { types: './dist/types/config.d.ts' },
     });
-    const options = selfReferenceOptions(
+    const options = await selfReferenceOptions(
       root,
       join(root, 'dist/types'),
       join(root, 'src'),
@@ -93,7 +93,7 @@ describe('selfReferenceOptions', () => {
       { './config': { types: './dist/types/config.d.ts' } },
       { compilerOptions: { paths: { '~/*': ['./src/*'] } } },
     );
-    const options = selfReferenceOptions(
+    const options = await selfReferenceOptions(
       root,
       join(root, 'dist/types'),
       join(root, 'src'),
@@ -114,7 +114,7 @@ describe('selfReferenceOptions', () => {
         }),
       },
     );
-    const options = selfReferenceOptions(
+    const options = await selfReferenceOptions(
       root,
       join(root, 'dist/types'),
       join(root, 'src'),
@@ -132,7 +132,7 @@ describe('selfReferenceOptions', () => {
       { 'src/index.ts': 'export const a = 1;' },
     );
     expect(
-      selfReferenceOptions(
+      await selfReferenceOptions(
         root,
         join(root, 'dist/types'),
         join(root, 'src'),
@@ -150,7 +150,7 @@ describe('selfReferenceOptions', () => {
           '{ "compilerOptions": { "paths": { "~/*": ["./src/*"] } /* aliases */ } }',
       },
     );
-    const options = selfReferenceOptions(
+    const options = await selfReferenceOptions(
       root,
       join(root, 'dist/types'),
       join(root, 'src'),
@@ -164,7 +164,7 @@ describe('selfReferenceOptions', () => {
   it('adds nothing when no exports target lies in the declaration output', async () => {
     const root = await selfReferencing({ '.': { types: './index.d.ts' } });
     expect(
-      selfReferenceOptions(
+      await selfReferenceOptions(
         root,
         join(root, 'dist'),
         join(root, 'src'),

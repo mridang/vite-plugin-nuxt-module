@@ -144,7 +144,7 @@ export async function emitBundledTypes(
   o: BundledTypesOptions & { outDir: string },
 ): Promise<void> {
   const sourceRoot = o.sourceRoot ?? SOURCE_ROOT;
-  const selfReference = selfReferenceOptions(
+  const selfReference = await selfReferenceOptions(
     o.root,
     o.outDir,
     path.resolve(o.root, sourceRoot),

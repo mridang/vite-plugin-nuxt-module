@@ -50,9 +50,9 @@ describe('runtimeFiles', () => {
       'src/runtime/__tests__/c.ts': '',
       'src/runtime/fixtures/d.ts': '',
     });
-    expect(runtimeFiles(join(root, 'src/runtime'), ['fixtures/**'])).toEqual([
-      'a.ts',
-    ]);
+    expect(
+      await runtimeFiles(join(root, 'src/runtime'), ['fixtures/**']),
+    ).toEqual(['a.ts']);
   });
 });
 

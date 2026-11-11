@@ -17,6 +17,6 @@ describe('walk', () => {
       await mkdir(path.join(dir, file, '..'), { recursive: true });
       await writeFile(path.join(dir, file), '');
     }
-    expect(walk(dir)).toEqual(['a/b/d.ts', 'a/c.vue', 'b.ts']);
+    expect(await walk(dir)).toEqual(['a/b/d.ts', 'a/c.vue', 'b.ts']);
   });
 });

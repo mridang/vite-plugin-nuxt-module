@@ -1,9 +1,10 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Plugin } from 'vite';
 
 import { emitBundledTypes } from './declarations/bundle.js';
 import { PLUGIN_PREFIX } from './defaults.js';
+import { exists } from './exists.js';
 import type { ResolvedOptions } from './options.js';
 import { packageTypeScript, realPackageDirectory } from './resolve.js';
 import { absolutePaths, parsedTsconfig } from './tsconfig.js';
@@ -90,17 +91,17 @@ export function moduleDeclarationOptions(
 }
 
 /** `<name>.d.ts` copies of each bundled entry's `<name>.d.mts`, for consumers on `node10` resolution. */
-export function writeCompatibleDeclarations(
+export async function writeCompatibleDeclarations(
   outDir: string,
   names: readonly string[],
-): void {
-  for (const name of names) {
-    const mts = path.join(outDir, `${name}.d.mts`);
-    // eslint-disable-next-line n/no-sync -- writeCompatibleDeclarations is synchronous and tested as such; async would ripple into it
-    if (existsSync(mts))
-      // eslint-disable-next-line n/no-sync -- same synchronous helper as the check above
-      writeFileSync(path.join(outDir, `${name}.d.ts`), readFileSync(mts));
-  }
+): Promise<void> {
+  await Promise.all(
+    names.map(async (name) => {
+      const mts = path.join(outDir, `${name}.d.mts`);
+      if (await exists(mts))
+        await writeFile(path.join(outDir, `${name}.d.ts`), await readFile(mts));
+    }),
+  );
 }
 
 /**
@@ -155,9 +156,9 @@ export function nuxtModuleOutputs(options: () => ResolvedOptions): Plugin {
       });
       // `module.mjs` → `module.d.mts`; an entry built as `.js` would pair with `.d.ts`.
       if (o.compatible && o.extension === '.mjs')
-        writeCompatibleDeclarations(outDir, Object.keys(o.entry));
+        await writeCompatibleDeclarations(outDir, Object.keys(o.entry));
     }
     await writeModuleJson({ ...o, outDir });
-    if (o.dts) writeTypesEntry(o.root, outDir, o.extension);
+    if (o.dts) await writeTypesEntry(o.root, outDir, o.extension);
   });
 }

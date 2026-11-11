@@ -222,7 +222,7 @@ describe('writeCompatibleDeclarations', () => {
     const root = await withTools({ name: 'mod' }, {});
     await mkdir(nodePath.join(root, 'dist'));
     await writeFile(nodePath.join(root, 'dist/module.d.mts'), 'export {};');
-    writeCompatibleDeclarations(nodePath.join(root, 'dist'), [
+    await writeCompatibleDeclarations(nodePath.join(root, 'dist'), [
       'module',
       'missing',
     ]);

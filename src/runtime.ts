@@ -77,12 +77,13 @@ export interface RuntimeOptions {
 }
 
 /** The runtime files that ship, relative to the runtime directory. */
-export function runtimeFiles(
+export async function runtimeFiles(
   runtimeDir: string,
   exclude: readonly string[],
-): string[] {
+): Promise<string[]> {
   const skipped = [...RUNTIME_EXCLUDE, ...exclude];
-  return walk(runtimeDir).filter((file) => !matchesAnyGlob(file, skipped));
+  const files = await walk(runtimeDir);
+  return files.filter((file) => !matchesAnyGlob(file, skipped));
 }
 
 /** Bundled entry sources (module + extra entries) by absolute path, mapped to where they are written. */
@@ -268,9 +269,8 @@ export function declarationRuntimeExternals(
  */
 export async function buildRuntime(o: RuntimeOptions): Promise<void> {
   const out = join(o.outDir, RUNTIME_OUT_DIR);
-  const files = runtimeFiles(o.runtimeDir, o.exclude).filter(
-    (f) => !isSassPartial(f),
-  );
+  const shipped = await runtimeFiles(o.runtimeDir, o.exclude);
+  const files = shipped.filter((f) => !isSassPartial(f));
   const scope = specifierScope(o);
   await rm(out, { recursive: true, force: true });
   const scripts: string[] = [];
