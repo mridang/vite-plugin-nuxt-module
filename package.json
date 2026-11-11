@@ -86,9 +86,9 @@
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
     "@babel/core": "^7.29.7",
-    "@eslint/compat": "^2.1.0",
+    "@eslint/compat": "^2.1.1",
     "@jest/globals": "^30.0.3",
-    "@mridang/eslint-defaults": "^1.6.3",
+    "@mridang/eslint-defaults": "file:../../../../../../../../private/tmp/claude-501/-Users-mridang-Code-mridang-eslint-defaults--claude-worktrees-jolly-nobel-b54514/5d85ee26-5030-436a-b806-a5058404a92f/scratchpad/pack/mridang-eslint-defaults-2.0.1.tgz",
     "@nuxt/kit": "^4.5.1",
     "@nuxt/schema": "^4.5.1",
     "@nuxt/test-utils": "^4.3.4",
@@ -101,18 +101,18 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^22.18.12",
     "@types/picomatch": "^4.0.2",
-    "eslint": "^9.39.4",
+    "eslint": "^9.39.5",
     "h3": "^1.15.3",
     "jest": "^30.0.3",
     "jest-junit": "^17.0.0",
     "knip": "^6.17.1",
     "nuxt": "^4.5.1",
-    "prettier": "^3.1.1",
+    "prettier": "^3.9.10",
     "publint": "^0.3.25",
     "sass": "^1.106.1",
     "semantic-release": "^25.0.1",
     "ts-jest": "^29.4.0",
-    "typescript": "^5.9.3",
+    "typescript": "~6.0.3",
     "vite": "^8.3.1",
     "vue": "^3.5.42",
     "vue-router": "^5.2.0",
@@ -121,5 +121,8 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "overrides": {
+    "@eslint/core": "1.2.1"
   }
 }
