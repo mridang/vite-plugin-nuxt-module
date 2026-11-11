@@ -1,8 +1,10 @@
-import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import type * as TypeScript from 'typescript';
+import path from 'node:path';
+import type TypeScript from 'typescript';
 
 import { LIB_TSCONFIG, PROJECT_TSCONFIG } from './defaults.js';
+import { exists } from './exists.js';
+
+const { dirname, join, resolve } = path;
 
 /** The TypeScript compiler module (the package's own, see `packageTypeScript`). */
 export type TS = typeof TypeScript;
@@ -40,6 +42,7 @@ export function absolutePaths(
   tsconfig: string,
 ): Record<string, string[]> {
   const base =
+    // eslint-disable-next-line sonarjs/deprecation -- user tsconfigs may still set baseUrl and it must keep resolving paths
     options.baseUrl ??
     (options.pathsBasePath as string | undefined) ??
     dirname(tsconfig);
@@ -57,21 +60,24 @@ export function absolutePaths(
  * `tsconfig.json` above it (a package in a monorepo that has none of its own is typed by the
  * workspace's), else `undefined`.
  */
-export function packageTsconfig(
+export async function packageTsconfig(
   root: string,
   tsconfig?: string,
-): string | undefined {
+): Promise<string | undefined> {
   if (tsconfig) return resolve(root, tsconfig);
-  const own = [LIB_TSCONFIG, PROJECT_TSCONFIG]
-    .map((name) => resolve(root, name))
-    .find((file) => existsSync(file));
+  const candidates = [LIB_TSCONFIG, PROJECT_TSCONFIG].map((name) =>
+    resolve(root, name),
+  );
+  const present = await Promise.all(candidates.map((file) => exists(file)));
+  const own = candidates.find((_, i) => present[i]);
   if (own) return own;
+  const ancestors: string[] = [];
   for (
     let dir = dirname(resolve(root));
     dir !== dirname(dir);
     dir = dirname(dir)
   )
-    if (existsSync(join(dir, PROJECT_TSCONFIG)))
-      return join(dir, PROJECT_TSCONFIG);
-  return undefined;
+    ancestors.push(join(dir, PROJECT_TSCONFIG));
+  const found = await Promise.all(ancestors.map((file) => exists(file)));
+  return ancestors.find((_, i) => found[i]);
 }

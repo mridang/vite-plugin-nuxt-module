@@ -4,8 +4,8 @@ import { describe, expect, it } from '@jest/globals';
 import { builderMeta, moduleJson } from '../src/module-json.js';
 
 describe('builderMeta', () => {
-  it('names this plugin and the Vite it built with', () => {
-    expect(builderMeta()).toEqual({
+  it('names this plugin and the Vite it built with', async () => {
+    expect(await builderMeta()).toEqual({
       '@mridang/vite-plugin-nuxt-module':
         expect.stringMatching(/^\d+\.\d+\.\d+/),
       vite: viteVersion,
@@ -14,9 +14,9 @@ describe('builderMeta', () => {
 });
 
 describe('moduleJson', () => {
-  it("fills name and version from the package when the module's meta has none", () => {
+  it("fills name and version from the package when the module's meta has none", async () => {
     expect(
-      moduleJson(
+      await moduleJson(
         { configKey: 'x' },
         { name: 'pkg', version: '1.0.0' },
         undefined,
@@ -24,9 +24,9 @@ describe('moduleJson', () => {
     ).toMatchObject({ configKey: 'x', name: 'pkg', version: '1.0.0' });
   });
 
-  it("keeps the module's own name and lets extra fields win", () => {
+  it("keeps the module's own name and lets extra fields win", async () => {
     expect(
-      moduleJson(
+      await moduleJson(
         { name: 'own' },
         { name: 'pkg', version: '1.0.0' },
         { version: '2.0.0' },

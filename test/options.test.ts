@@ -1,24 +1,24 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import nodePath from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
 import { matchesAny } from '../src/externals.js';
 import { resolveOptions } from '../src/options.js';
 
+const DEFAULT_FILES: Record<string, string> = { 'src/module.ts': '' };
+const DEFAULT_PACKAGE: Record<string, unknown> = {
+  name: 'mod',
+  type: 'module',
+};
+
 /** A module package: `src/module.ts` and an empty `src/runtime` unless `files` says otherwise. */
-function packageRoot(
-  files: Record<string, string> = { 'src/module.ts': '' },
-  pkg: Record<string, unknown> = { name: 'mod', type: 'module' },
-): string {
-  const root = realpathSync(
-    mkdtempSync(join(tmpdir(), 'nuxt-module-options-')),
+async function packageRoot(
+  files: Record<string, string> = DEFAULT_FILES,
+  pkg: Record<string, unknown> = DEFAULT_PACKAGE,
+): Promise<string> {
+  const root = await realpath(
+    await mkdtemp(nodePath.join(tmpdir(), 'nuxt-module-options-')),
   );
   const all = {
     'package.json': JSON.stringify(pkg),
@@ -26,111 +26,131 @@ function packageRoot(
     ...files,
   };
   for (const [path, content] of Object.entries(all)) {
-    mkdirSync(dirname(join(root, path)), { recursive: true });
-    writeFileSync(join(root, path), content);
+    await mkdir(nodePath.dirname(nodePath.join(root, path)), {
+      recursive: true,
+    });
+    await writeFile(nodePath.join(root, path), content);
   }
   if ('src/module.ts' in files)
-    mkdirSync(join(root, 'src/runtime'), { recursive: true });
+    await mkdir(nodePath.join(root, 'src/runtime'), { recursive: true });
   return root;
 }
 
 describe('resolveOptions', () => {
-  it('builds the module and its per-file runtime by default', () => {
-    const root = packageRoot();
-    const o = resolveOptions({}, root);
+  it('builds the module and its per-file runtime by default', async () => {
+    const root = await packageRoot();
+    const o = await resolveOptions({}, root);
     expect([o.entry, o.runtimeDir, o.extension, o.dts, o.sourcemap]).toEqual([
-      { module: join(root, 'src/module.ts') },
-      join(root, 'src/runtime'),
+      { module: nodePath.join(root, 'src/module.ts') },
+      nodePath.join(root, 'src/runtime'),
       '.mjs',
       true,
       false,
     ]);
   });
 
-  it('bundles extra entries next to the module', () => {
-    const root = packageRoot();
-    expect(
-      resolveOptions({ entry: { server: 'src/server.ts' } }, root).entry,
-    ).toEqual({
-      module: join(root, 'src/module.ts'),
-      server: join(root, 'src/server.ts'),
+  it('bundles extra entries next to the module', async () => {
+    const root = await packageRoot();
+    const awaited1 = await resolveOptions(
+      { entry: { server: 'src/server.ts' } },
+      root,
+    );
+    expect(awaited1.entry).toEqual({
+      module: nodePath.join(root, 'src/module.ts'),
+      server: nodePath.join(root, 'src/server.ts'),
     });
   });
 
-  it('names listed entries after their files', () => {
-    const root = packageRoot();
-    expect(
-      resolveOptions({ entry: ['src/utils/headers.ts'] }, root).entry,
-    ).toEqual({
-      module: join(root, 'src/module.ts'),
-      headers: join(root, 'src/utils/headers.ts'),
+  it('names listed entries after their files', async () => {
+    const root = await packageRoot();
+    const awaited2 = await resolveOptions(
+      { entry: ['src/utils/headers.ts'] },
+      root,
+    );
+    expect(awaited2.entry).toEqual({
+      module: nodePath.join(root, 'src/module.ts'),
+      headers: nodePath.join(root, 'src/utils/headers.ts'),
     });
   });
 
-  it('builds a module file that is not src/module.ts', () => {
-    const root = packageRoot({ 'src/nuxt.ts': '' });
-    expect(resolveOptions({ module: 'src/nuxt.ts' }, root).entry).toEqual({
-      module: join(root, 'src/nuxt.ts'),
+  it('builds a module file that is not src/module.ts', async () => {
+    const root = await packageRoot({ 'src/nuxt.ts': '' });
+    const awaited3 = await resolveOptions({ module: 'src/nuxt.ts' }, root);
+    expect(awaited3.entry).toEqual({
+      module: nodePath.join(root, 'src/nuxt.ts'),
     });
   });
 
-  it('fails without a module file to build', () => {
-    expect(() => resolveOptions({}, packageRoot({}))).toThrow(
+  it('fails without a module file to build', async () => {
+    const root = await packageRoot({});
+    await expect(resolveOptions({}, root)).rejects.toThrow(
       /no module to build: src\/module\.ts does not exist/,
     );
   });
 
-  it('refuses an entry inside the runtime directory, which is built file by file', () => {
-    expect(() =>
+  it('refuses an entry inside the runtime directory, which is built file by file', async () => {
+    const root = await packageRoot();
+    await expect(
       resolveOptions(
         { entry: { 'runtime/plugin': 'src/runtime/plugin.ts' } },
-        packageRoot(),
+        root,
       ),
-    ).toThrow(/src\/runtime\/plugin\.ts lie in the runtime directory/);
+    ).rejects.toThrow(/src\/runtime\/plugin\.ts lie in the runtime directory/);
   });
 
   it.each([['.cjs'], ['.jsx']])(
     'refuses the extension %s, which Node cannot import as ESM',
-    (ext) => {
-      expect(() =>
-        resolveOptions({ extension: ext as '.mjs' }, packageRoot()),
-      ).toThrow(`extension ${ext} is not one of .mjs, .js`);
+    async (ext) => {
+      const root = await packageRoot();
+      await expect(
+        resolveOptions({ extension: ext as '.mjs' }, root),
+      ).rejects.toThrow(`extension ${ext} is not one of .mjs, .js`);
     },
   );
 
-  it('refuses the extension .js in a package that is not an ES module package', () => {
-    const root = packageRoot(undefined, { name: 'mod', type: 'commonjs' });
-    expect(() => resolveOptions({ extension: '.js' }, root)).toThrow(
+  it('refuses the extension .js in a package that is not an ES module package', async () => {
+    const root = await packageRoot(undefined, {
+      name: 'mod',
+      type: 'commonjs',
+    });
+    await expect(resolveOptions({ extension: '.js' }, root)).rejects.toThrow(
       /"type": "module"/,
     );
   });
 
-  it('accepts the extension .js in an ES module package', () => {
-    expect(resolveOptions({ extension: '.js' }, packageRoot()).extension).toBe(
-      '.js',
+  it('accepts the extension .js in an ES module package', async () => {
+    const awaited4 = await resolveOptions(
+      { extension: '.js' },
+      await packageRoot(),
     );
+    expect(awaited4.extension).toBe('.js');
   });
 
-  it('refuses a runtime directory that does not exist', () => {
-    expect(() =>
-      resolveOptions({ runtimeDir: 'src/missing' }, packageRoot()),
-    ).toThrow(/runtime directory src\/missing not found/);
+  it('refuses a runtime directory that does not exist', async () => {
+    const root = await packageRoot();
+    await expect(
+      resolveOptions({ runtimeDir: 'src/missing' }, root),
+    ).rejects.toThrow(/runtime directory src\/missing not found/);
   });
 
-  it('has no runtime for a module without one', () => {
-    expect(
-      resolveOptions({ runtimeDir: false }, packageRoot()).runtimeDir,
-    ).toBeUndefined();
+  it('has no runtime for a module without one', async () => {
+    const awaited5 = await resolveOptions(
+      { runtimeDir: false },
+      await packageRoot(),
+    );
+    expect(awaited5.runtimeDir).toBeUndefined();
   });
 
-  it('has no runtime when the default directory does not exist', () => {
-    const root = packageRoot();
-    rmSync(join(root, 'src/runtime'), { recursive: true });
-    expect(resolveOptions({}, root).runtimeDir).toBeUndefined();
+  it('has no runtime when the default directory does not exist', async () => {
+    const root = await packageRoot();
+    await rm(nodePath.join(root, 'src/runtime'), { recursive: true });
+    const awaited6 = await resolveOptions({}, root);
+    expect(awaited6.runtimeDir).toBeUndefined();
   });
 
-  it('writes no source maps unless asked, like @nuxt/module-builder', () => {
-    expect(resolveOptions({}, packageRoot()).sourcemap).toBe(false);
+  it('writes no source maps unless asked, like @nuxt/module-builder', async () => {
+    const awaited7 = await resolveOptions({}, await packageRoot());
+    expect(awaited7.sourcemap).toBe(false);
   });
 
   it.each([
@@ -139,10 +159,9 @@ describe('resolveOptions', () => {
     [{ sourcemap: false }, { build: { sourcemap: true } }, false],
   ])(
     'decides source maps for %j under the Vite config %j: %s',
-    (options, vite, expected) => {
-      expect(resolveOptions(options, packageRoot(), vite).sourcemap).toBe(
-        expected,
-      );
+    async (options, vite, expected) => {
+      const awaited8 = await resolveOptions(options, await packageRoot(), vite);
+      expect(awaited8.sourcemap).toBe(expected);
     },
   );
 
@@ -153,18 +172,17 @@ describe('resolveOptions', () => {
     ['h3'],
     ['vue'],
     ['node:fs'],
-  ])('leaves %s to the app', (id) => {
-    expect(matchesAny(id, resolveOptions({}, packageRoot()).external)).toBe(
-      true,
-    );
+  ])('leaves %s to the app', async (id) => {
+    const awaited9 = await resolveOptions({}, await packageRoot());
+    expect(matchesAny(id, awaited9.external)).toBe(true);
   });
 
-  it('leaves a declared dependency and an extra external alone, and inlines the rest', () => {
-    const root = packageRoot(
+  it('leaves a declared dependency and an extra external alone, and inlines the rest', async () => {
+    const root = await packageRoot(
       { 'src/module.ts': '' },
       { name: 'mod', type: 'module', dependencies: { dep: '1' } },
     );
-    const { external } = resolveOptions({ external: ['extra'] }, root);
+    const { external } = await resolveOptions({ external: ['extra'] }, root);
     expect([
       matchesAny('dep', external),
       matchesAny('extra', external),
@@ -172,16 +190,16 @@ describe('resolveOptions', () => {
     ]).toEqual([true, true, false]);
   });
 
-  it('reads dts options', () => {
-    const o = resolveOptions(
+  it('reads dts options', async () => {
+    const o = await resolveOptions(
       { dts: { compatible: true, eager: true } },
-      packageRoot(),
+      await packageRoot(),
     );
     expect([o.dts, o.compatible, o.eager]).toEqual([true, true, true]);
   });
 
-  it('turns declarations off', () => {
-    const o = resolveOptions({ dts: false }, packageRoot());
+  it('turns declarations off', async () => {
+    const o = await resolveOptions({ dts: false }, await packageRoot());
     expect([o.dts, o.compatible, o.eager]).toEqual([false, false, false]);
   });
 });

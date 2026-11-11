@@ -30,10 +30,11 @@ export function starReExports(code: string, id: string): StarReExports {
     return { typeOnly, value };
   }
   for (const node of body) {
-    if (node.type !== 'ExportAllDeclaration' || node.exported) continue;
-    const source = node.source.value;
-    if (source.startsWith('.') || source.startsWith('/')) continue;
-    (node.exportKind === 'type' ? typeOnly : value).push(source);
+    if (node.type === 'ExportAllDeclaration' && !node.exported) {
+      const source = node.source.value;
+      if (!source.startsWith('.') && !source.startsWith('/'))
+        (node.exportKind === 'type' ? typeOnly : value).push(source);
+    }
   }
   return { typeOnly, value };
 }

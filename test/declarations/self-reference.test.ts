@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import path from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
 import { fixture } from '../utils/fixture.js';
@@ -7,19 +7,20 @@ import {
   typesTarget,
 } from '../../src/declarations/self-reference.js';
 
-function selfReferencing(
+const { join } = path;
+
+async function selfReferencing(
   exportsMap: unknown,
   tsconfig: Record<string, unknown> = {},
   files: Record<string, string> = {},
-): string {
-  const root = fixture({
+): Promise<string> {
+  return await fixture({
     'package.json': JSON.stringify({ name: 'pkg', exports: exportsMap }),
     'src/config.tsx': 'export default 1;',
     'src/index.ts': 'export { default as config } from "pkg/config";',
     'tsconfig.json': JSON.stringify(tsconfig),
     ...files,
   });
-  return root;
 }
 
 describe('typesTarget', () => {
@@ -36,14 +37,14 @@ describe('typesTarget', () => {
 });
 
 describe('selfReferenceOptions', () => {
-  it('maps an exports subpath whose types live in the declaration output to its source', () => {
-    const root = selfReferencing({
+  it('maps an exports subpath whose types live in the declaration output to its source', async () => {
+    const root = await selfReferencing({
       './config': {
         types: './dist/types/config.d.ts',
         default: './dist/config.js',
       },
     });
-    const options = selfReferenceOptions(
+    const options = await selfReferenceOptions(
       root,
       join(root, 'dist/types'),
       join(root, 'src'),
@@ -54,13 +55,13 @@ describe('selfReferenceOptions', () => {
     ]);
   });
 
-  it('maps an exports subpath to the entry of that name when it is named apart from its source', () => {
-    const root = selfReferencing(
+  it('maps an exports subpath to the entry of that name when it is named apart from its source', async () => {
+    const root = await selfReferencing(
       { './config': { types: './dist/config.d.mts' } },
       {},
       { 'src/cfg/main.ts': 'export default 1;' },
     );
-    const options = selfReferenceOptions(
+    const options = await selfReferenceOptions(
       root,
       join(root, 'dist'),
       join(root, 'src'),
@@ -72,11 +73,11 @@ describe('selfReferenceOptions', () => {
     ]);
   });
 
-  it('keeps the self-reference a bare specifier in the declarations', () => {
-    const root = selfReferencing({
+  it('keeps the self-reference a bare specifier in the declarations', async () => {
+    const root = await selfReferencing({
       './config': { types: './dist/types/config.d.ts' },
     });
-    const options = selfReferenceOptions(
+    const options = await selfReferenceOptions(
       root,
       join(root, 'dist/types'),
       join(root, 'src'),
@@ -87,12 +88,12 @@ describe('selfReferenceOptions', () => {
     );
   });
 
-  it("keeps the tsconfig's own paths next to the self-references", () => {
-    const root = selfReferencing(
+  it("keeps the tsconfig's own paths next to the self-references", async () => {
+    const root = await selfReferencing(
       { './config': { types: './dist/types/config.d.ts' } },
       { compilerOptions: { paths: { '~/*': ['./src/*'] } } },
     );
-    const options = selfReferenceOptions(
+    const options = await selfReferenceOptions(
       root,
       join(root, 'dist/types'),
       join(root, 'src'),
@@ -103,8 +104,8 @@ describe('selfReferenceOptions', () => {
     ]);
   });
 
-  it('keeps the paths a tsconfig inherits through extends', () => {
-    const root = selfReferencing(
+  it('keeps the paths a tsconfig inherits through extends', async () => {
+    const root = await selfReferencing(
       { './config': { types: './dist/types/config.d.ts' } },
       { extends: './tsconfig.base.json' },
       {
@@ -113,7 +114,7 @@ describe('selfReferenceOptions', () => {
         }),
       },
     );
-    const options = selfReferenceOptions(
+    const options = await selfReferenceOptions(
       root,
       join(root, 'dist/types'),
       join(root, 'src'),
@@ -124,14 +125,14 @@ describe('selfReferenceOptions', () => {
     ]);
   });
 
-  it("adds nothing when no source imports the package's own name", () => {
-    const root = selfReferencing(
+  it("adds nothing when no source imports the package's own name", async () => {
+    const root = await selfReferencing(
       { './config': { types: './dist/types/config.d.ts' } },
       {},
       { 'src/index.ts': 'export const a = 1;' },
     );
     expect(
-      selfReferenceOptions(
+      await selfReferenceOptions(
         root,
         join(root, 'dist/types'),
         join(root, 'src'),
@@ -140,8 +141,8 @@ describe('selfReferenceOptions', () => {
     ).toEqual({});
   });
 
-  it('keeps the own paths of a tsconfig whose comments follow a path pattern', () => {
-    const root = selfReferencing(
+  it('keeps the own paths of a tsconfig whose comments follow a path pattern', async () => {
+    const root = await selfReferencing(
       { './config': { types: './dist/types/config.d.ts' } },
       {},
       {
@@ -149,7 +150,7 @@ describe('selfReferenceOptions', () => {
           '{ "compilerOptions": { "paths": { "~/*": ["./src/*"] } /* aliases */ } }',
       },
     );
-    const options = selfReferenceOptions(
+    const options = await selfReferenceOptions(
       root,
       join(root, 'dist/types'),
       join(root, 'src'),
@@ -160,10 +161,10 @@ describe('selfReferenceOptions', () => {
     ]);
   });
 
-  it('adds nothing when no exports target lies in the declaration output', () => {
-    const root = selfReferencing({ '.': { types: './index.d.ts' } });
+  it('adds nothing when no exports target lies in the declaration output', async () => {
+    const root = await selfReferencing({ '.': { types: './index.d.ts' } });
     expect(
-      selfReferenceOptions(
+      await selfReferenceOptions(
         root,
         join(root, 'dist'),
         join(root, 'src'),

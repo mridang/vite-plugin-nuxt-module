@@ -1,5 +1,5 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
 import { FIXTURE_TSCONFIG, fixture } from '../utils/fixture.js';
@@ -9,6 +9,8 @@ import {
   sourceTypeErrors,
 } from '../../src/declarations/check.js';
 
+const { join } = path;
+
 /** The compiler options of {@link FIXTURE_TSCONFIG}. */
 const fixtureOptions = JSON.parse(FIXTURE_TSCONFIG).compilerOptions as Record<
   string,
@@ -16,28 +18,30 @@ const fixtureOptions = JSON.parse(FIXTURE_TSCONFIG).compilerOptions as Record<
 >;
 
 describe('sourceTypeErrors', () => {
-  it('reports a type error of the sources, relative to the root', () => {
-    const root = fixture({
+  it('reports a type error of the sources, relative to the root', async () => {
+    const root = await fixture({
       'package.json': '{}',
       'tsconfig.json': FIXTURE_TSCONFIG,
       'src/index.ts': 'export const x: number = "s";\n',
     });
-    expect(sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual([
+    expect(await sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual([
       expect.stringMatching(/^src\/index\.ts\(1,14\): error TS2322/),
     ]);
   });
 
-  it('reports nothing for sources that type-check', () => {
-    const root = fixture({
+  it('reports nothing for sources that type-check', async () => {
+    const root = await fixture({
       'package.json': '{}',
       'tsconfig.json': FIXTURE_TSCONFIG,
       'src/index.ts': 'export const x: number = 1;\n',
     });
-    expect(sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual([]);
+    expect(await sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual(
+      [],
+    );
   });
 
-  it('reports an option error, as tsc -p does', () => {
-    const root = fixture({
+  it('reports an option error, as tsc -p does', async () => {
+    const root = await fixture({
       'package.json': '{}',
       'tsconfig.json': JSON.stringify({
         compilerOptions: { ...fixtureOptions, types: ['nonexistent-types'] },
@@ -45,24 +49,26 @@ describe('sourceTypeErrors', () => {
       }),
       'src/index.ts': 'export const x: number = 1;\n',
     });
-    expect(sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual([
+    expect(await sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual([
       expect.stringMatching(/TS2688/),
     ]);
   });
 
-  it('leaves the tests under the source root out', () => {
-    const root = fixture({
+  it('leaves the tests under the source root out', async () => {
+    const root = await fixture({
       'package.json': '{}',
       'tsconfig.json': FIXTURE_TSCONFIG,
       'src/index.ts': 'export const x: number = 1;\n',
       'src/index.test.ts': 'describe("x", () => {});\n',
       'src/__tests__/helper.ts': 'expect(1);\n',
     });
-    expect(sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual([]);
+    expect(await sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual(
+      [],
+    );
   });
 
-  it('checks under the compiler options the declarations are emitted with', () => {
-    const root = fixture(
+  it('checks under the compiler options the declarations are emitted with', async () => {
+    const root = await fixture(
       {
         'package.json': '{}',
         'tsconfig.json': FIXTURE_TSCONFIG,
@@ -74,7 +80,7 @@ describe('sourceTypeErrors', () => {
       { link: ['typescript'] },
     );
     expect(
-      sourceTypeErrors(root, join(root, 'tsconfig.json'), {
+      await sourceTypeErrors(root, join(root, 'tsconfig.json'), {
         overrides: { paths: { schema: [join(root, 'vendor/schema')] } },
       }),
     ).toEqual([]);
@@ -94,14 +100,14 @@ describe('isSourceTest', () => {
 });
 
 describe('declarationTypeErrors', () => {
-  it('reports an error inside the written declarations only', () => {
-    const root = fixture({
+  it('reports an error inside the written declarations only', async () => {
+    const root = await fixture({
       'package.json': '{}',
       'tsconfig.json': FIXTURE_TSCONFIG,
       'dist/index.d.mts': 'export type A = missing_ns.B;\n',
     });
     expect(
-      declarationTypeErrors(
+      await declarationTypeErrors(
         root,
         join(root, 'tsconfig.json'),
         join(root, 'dist'),
@@ -112,8 +118,8 @@ describe('declarationTypeErrors', () => {
     ]);
   });
 
-  it("leaves a dependency's own declarations to it", () => {
-    const root = fixture(
+  it("leaves a dependency's own declarations to it", async () => {
+    const root = await fixture(
       {
         'package.json': '{}',
         'tsconfig.json': FIXTURE_TSCONFIG,
@@ -126,10 +132,10 @@ describe('declarationTypeErrors', () => {
       },
       { link: ['typescript'] },
     );
-    mkdirSync(join(root, 'src'), { recursive: true });
-    writeFileSync(join(root, 'src/index.ts'), 'export {};\n');
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'src/index.ts'), 'export {};\n');
     expect(
-      declarationTypeErrors(
+      await declarationTypeErrors(
         root,
         join(root, 'tsconfig.json'),
         join(root, 'dist'),
@@ -138,8 +144,8 @@ describe('declarationTypeErrors', () => {
     ).toEqual([]);
   });
 
-  it('reads the declarations with the compiler options they were emitted under', () => {
-    const root = fixture(
+  it('reads the declarations with the compiler options they were emitted under', async () => {
+    const root = await fixture(
       {
         'package.json': '{}',
         'tsconfig.json': FIXTURE_TSCONFIG,
@@ -149,7 +155,7 @@ describe('declarationTypeErrors', () => {
       { link: ['typescript'] },
     );
     expect(
-      declarationTypeErrors(
+      await declarationTypeErrors(
         root,
         join(root, 'tsconfig.json'),
         join(root, 'dist'),

@@ -18,16 +18,14 @@ export interface BuildLog {
 }
 
 /** Log codes that are reports, not problems: never a failure. */
-const REPORT_CODES: readonly string[] = ['PLUGIN_TIMINGS'];
+const REPORT_CODES: ReadonlySet<string> = new Set(['PLUGIN_TIMINGS']);
 
 /** Whether `code` is a report or listed in `allow`. */
 export function isAllowed(
   code: string | undefined,
   allow: readonly string[],
 ): boolean {
-  return (
-    code !== undefined && (REPORT_CODES.includes(code) || allow.includes(code))
-  );
+  return code !== undefined && (REPORT_CODES.has(code) || allow.includes(code));
 }
 
 /**
@@ -55,6 +53,9 @@ function failure(log: BuildLog): Error {
   return new Error(`${code ?? 'warning'}: ${log.message}`);
 }
 
+/** A build outcome that has not failed yet. */
+const freshOutcome = (): BuildOutcome => ({ failed: false });
+
 /**
  * The warnings-as-errors policy of the module build: every warning fails it, except reports and
  * the codes in `allow`. Both hooks are needed: some warnings (e.g. EMPTY_IMPORT_META, raised
@@ -62,7 +63,7 @@ function failure(log: BuildLog): Error {
  */
 export function failOnWarnings(
   allow: readonly string[],
-  outcome: BuildOutcome = { failed: false },
+  outcome: BuildOutcome = freshOutcome(),
 ) {
   const fail = (log: BuildLog): never => {
     outcome.failed = true;
@@ -94,7 +95,7 @@ export function failOnDeclarationWarnings(allow: readonly string[]) {
     log: T,
     handler: (level: L, log: T) => void,
   ): void => {
-    if (log.code && REPORT_CODES.includes(log.code)) return;
+    if (log.code && REPORT_CODES.has(log.code)) return;
     policy.onLog(level, log, handler);
   };
 }
@@ -256,7 +257,7 @@ function onClose(
     },
     closeBundle() {
       const resolved = config;
-      if (!resolved) return;
+      if (!resolved) return undefined;
       // Under `--watch` the next rebuild can start before this step ends (Vite does not wait for
       // it): the outcome is read now, the runs go one at a time, and a failure is recorded only
       // while no later build has started.

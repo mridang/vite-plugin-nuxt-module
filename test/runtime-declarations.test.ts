@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import nodePath from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
 import { FIXTURE_TSCONFIG, fixture, output } from './utils/fixture.js';
@@ -23,9 +23,9 @@ describe('declarationFileOf', () => {
 });
 
 describe('rewriteRuntimeTypeAliases', () => {
-  it('names #app and its subpaths nuxt/app, in imports and import types', () => {
+  it('names #app and its subpaths nuxt/app, in imports and import types', async () => {
     expect(
-      rewriteRuntimeTypeAliases(
+      await rewriteRuntimeTypeAliases(
         'import { a } from "#app";\nimport type { b } from \'#app/composables\';\ntype C = import("#app/nuxt").C;\nimport { d } from "#imports";\n',
       ),
     ).toBe(
@@ -64,11 +64,11 @@ describe('declarationCompilerOptions', () => {
 });
 
 describe('emitRuntimeDeclarations', () => {
-  const module = (
+  const module = async (
     files: Record<string, string>,
     link: string[] = ['typescript'],
-  ): string =>
-    fixture(
+  ): Promise<string> =>
+    await fixture(
       {
         'package.json': JSON.stringify({ name: 'mod', type: 'module' }),
         'tsconfig.json': FIXTURE_TSCONFIG,
@@ -76,29 +76,31 @@ describe('emitRuntimeDeclarations', () => {
       },
       { link },
     );
-  const emit = (root: string, scripts: string[], vues: string[] = []) =>
-    emitRuntimeDeclarations(
+  const emit = (root: string, scripts: string[], vues: string[] = []) => {
+    let tsconfig: string | undefined;
+    return emitRuntimeDeclarations(
       {
         root,
-        runtimeDir: join(root, 'src/runtime'),
-        outDir: join(root, 'dist'),
-        tsconfig: undefined,
-        scope: { runtimeDir: join(root, 'src/runtime'), entries: {} },
+        runtimeDir: nodePath.join(root, 'src/runtime'),
+        outDir: nodePath.join(root, 'dist'),
+        tsconfig,
+        scope: { runtimeDir: nodePath.join(root, 'src/runtime'), entries: {} },
       },
-      scripts.map((f) => join(root, f)),
-      vues.map((f) => join(root, f)),
+      scripts.map((f) => nodePath.join(root, f)),
+      vues.map((f) => nodePath.join(root, f)),
     );
+  };
 
   it('declares every runtime script, with explicit extensions', async () => {
-    const root = module({
+    const root = await module({
       'src/runtime/plugin.ts':
         'import type { X } from "./lib/x";\nexport const y = (x: X): number => x.n;\n',
       'src/runtime/lib/x.ts': 'export interface X { n: number }\n',
     });
     await emit(root, ['src/runtime/plugin.ts', 'src/runtime/lib/x.ts']);
     expect([
-      output(root, 'dist/runtime/plugin.d.ts'),
-      output(root, 'dist/runtime/lib/x.d.ts'),
+      await output(root, 'dist/runtime/plugin.d.ts'),
+      await output(root, 'dist/runtime/lib/x.d.ts'),
     ]).toEqual([
       expect.stringMatching(/from ["']\.\/lib\/x\.js["']/),
       expect.stringContaining('n: number'),
@@ -106,7 +108,7 @@ describe('emitRuntimeDeclarations', () => {
   });
 
   it('declares a runtime .vue file through the vue-tsc of this plugin, which the module need not install', async () => {
-    const root = module(
+    const root = await module(
       {
         'src/runtime/C.vue':
           '<script setup lang="ts">\ndefineProps<{ label: string }>();\n</script>\n<template><p>{{ label }}</p></template>\n',
@@ -114,11 +116,13 @@ describe('emitRuntimeDeclarations', () => {
       ['typescript', 'vue'],
     );
     await emit(root, [], ['src/runtime/C.vue']);
-    expect(output(root, 'dist/runtime/C.vue.d.ts')).toContain('label: string');
+    expect(await output(root, 'dist/runtime/C.vue.d.ts')).toContain(
+      'label: string',
+    );
   }, 60_000);
 
   it('fails on a runtime import TypeScript cannot resolve, whose types the declaration would lose', async () => {
-    const root = module({
+    const root = await module({
       'src/runtime/plugin.ts':
         'import { defineNuxtPlugin } from "#imports";\nexport default defineNuxtPlugin(() => {});\n',
     });
@@ -128,13 +132,15 @@ describe('emitRuntimeDeclarations', () => {
   });
 
   it('types a runtime import through an ambient declaration the tsconfig compiles with', async () => {
-    const root = module({
+    const root = await module({
       'src/shims.d.ts':
         'declare module "#imports" {\n  export function defineNuxtPlugin(setup: () => void): { plugin: true };\n}\n',
       'src/runtime/plugin.ts':
         'import { defineNuxtPlugin } from "#imports";\nexport default defineNuxtPlugin(() => {});\n',
     });
     await emit(root, ['src/runtime/plugin.ts']);
-    expect(output(root, 'dist/runtime/plugin.d.ts')).toContain('plugin: true');
+    expect(await output(root, 'dist/runtime/plugin.d.ts')).toContain(
+      'plugin: true',
+    );
   });
 });

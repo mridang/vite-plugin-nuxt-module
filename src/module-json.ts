@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { version as viteVersion } from 'vite';
 
@@ -15,10 +15,13 @@ interface ModuleExport {
 }
 
 /** The `name` and `version` of this package, read from the manifest next to `src` / `dist`. */
-function ownPackage(): { readonly name: string; readonly version: string } {
+async function ownPackage(): Promise<{
+  readonly name: string;
+  readonly version: string;
+}> {
   return JSON.parse(
-    readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'),
+    await readFile(
+      fileURLToPath(new URL('../package.json', import.meta.url)),
       'utf8',
     ),
   ) as {
@@ -28,8 +31,8 @@ function ownPackage(): { readonly name: string; readonly version: string } {
 }
 
 /** The tools a module was built with, as `module.json` records them: this plugin and Vite. */
-export function builderMeta(): Record<string, string> {
-  const { name, version } = ownPackage();
+export async function builderMeta(): Promise<Record<string, string>> {
+  const { name, version } = await ownPackage();
   return { [name]: version, vite: viteVersion };
 }
 
@@ -37,15 +40,15 @@ export function builderMeta(): Record<string, string> {
  * The `module.json` of a built module: what its `getMeta()` returns, the package's name and version
  * where it gives none, the builder, then `extra`.
  */
-export function moduleJson(
+export async function moduleJson(
   meta: Readonly<Record<string, unknown>>,
   pkg: { readonly name?: string; readonly version?: string },
   extra: Readonly<Record<string, unknown>> | undefined,
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   const merged: Record<string, unknown> = { ...meta };
   if (!merged.name) merged.name = pkg.name;
   if (!merged.version) merged.version = pkg.version;
-  merged.builder = builderMeta();
+  merged.builder = await builderMeta();
   return { ...merged, ...extra };
 }
 
@@ -56,12 +59,19 @@ export async function writeModuleJson(o: {
   readonly extension: string;
   readonly moduleMeta: Readonly<Record<string, unknown>> | undefined;
 }): Promise<void> {
-  const file = join(o.outDir, `module${o.extension}`);
+  const file = path.join(o.outDir, `module${o.extension}`);
   // eslint-disable-next-line no-unsanitized/method -- loads the module this build just wrote
   const mod = (await import(
     `${pathToFileURL(file).href}?t=${Date.now()}`
   )) as ModuleExport;
   const meta = (await mod.default?.getMeta?.()) ?? {};
-  const json = moduleJson(meta, readPackageJson(o.root), o.moduleMeta);
-  writeFileSync(join(o.outDir, MODULE_JSON), JSON.stringify(json, null, 2));
+  const json = await moduleJson(
+    meta,
+    await readPackageJson(o.root),
+    o.moduleMeta,
+  );
+  await writeFile(
+    path.join(o.outDir, MODULE_JSON),
+    JSON.stringify(json, null, 2),
+  );
 }

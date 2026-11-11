@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process';
-import { resolve } from 'node:path';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { firstFound } from './exists.js';
 import { realPackageDirectory, resolveFromRoot } from './resolve.js';
 
 /** The Nuxt packages `nuxi` comes with, in the order they are looked for. */
@@ -20,13 +21,12 @@ export const PREPARE_OVERRIDES = {
 } as const;
 
 /** `@nuxt/cli` (`nuxi`): the copy the installed Nuxt comes with, else the module's own. */
-function resolveNuxtCli(root: string): string | undefined {
-  for (const name of NUXT_PACKAGES) {
-    const nuxt = realPackageDirectory(name, root);
-    const cli = nuxt && resolveFromRoot('@nuxt/cli', nuxt);
-    if (cli) return cli;
-  }
-  return resolveFromRoot('@nuxt/cli', root);
+async function resolveNuxtCli(root: string): Promise<string | undefined> {
+  const viaNuxt = await firstFound(NUXT_PACKAGES, async (name) => {
+    const nuxt = await realPackageDirectory(name, root);
+    return nuxt ? resolveFromRoot('@nuxt/cli', nuxt) : undefined;
+  });
+  return viaNuxt ?? resolveFromRoot('@nuxt/cli', root);
 }
 
 /**
@@ -65,7 +65,7 @@ export async function prepareModule(
   root: string,
   moduleEntry: string,
 ): Promise<void> {
-  const cli = resolveNuxtCli(root);
+  const cli = await resolveNuxtCli(root);
   if (!cli)
     throw new Error(
       `nuxtModule: prepare needs \`nuxt\` (or \`@nuxt/cli\`) installed in ${root}`,
@@ -73,11 +73,11 @@ export async function prepareModule(
   const options = {
     cli: pathToFileURL(cli).href,
     root,
-    module: resolve(root, moduleEntry),
+    module: path.resolve(root, moduleEntry),
     overrides: PREPARE_OVERRIDES,
   };
   const { code, out } = await new Promise<{ code: number; out: string }>(
-    (done) => {
+    (resolve) => {
       const child = spawn(
         process.execPath,
         ['--input-type=module', '-e', PREPARE_SCRIPT],
@@ -94,7 +94,7 @@ export async function prepareModule(
       child.stderr.on('data', (d) => {
         text += d;
       });
-      child.on('close', (exit) => done({ code: exit ?? 1, out: text }));
+      child.on('close', (exit) => resolve({ code: exit ?? 1, out: text }));
     },
   );
   if (code !== 0)

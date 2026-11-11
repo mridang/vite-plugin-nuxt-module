@@ -127,7 +127,7 @@ describe('failOnLoggedWarnings', () => {
     const { customLogger, plugin } = failOnLoggedWarnings(outcome);
     call(plugin.config, { logLevel: 'silent' });
     customLogger.warn(
-      "\u001b[33mYou've set rolldownOptions.output.output\u001b[39m",
+      "\u001B[33mYou've set rolldownOptions.output.output\u001B[39m",
     );
     expect(() => call(plugin.buildStart)).toThrow(
       "Vite warned:\nYou've set rolldownOptions.output.output",

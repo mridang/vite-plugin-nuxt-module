@@ -1,8 +1,11 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { parseAst } from 'vite';
+import { readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { parse } from 'vite';
 
+import { exists } from './exists.js';
 import { namesFile } from './package-json.js';
+
+const { join } = path;
 
 /** An identifier or string literal naming an export. */
 interface ExportName {
@@ -30,25 +33,22 @@ interface Reexport {
 }
 
 /** The module declaration's exports: every name, and each export statement to re-export. */
-function scanExports(declaration: string): {
+async function scanExports(declaration: string): Promise<{
   names: Set<string>;
   reexports: Reexport[];
-} {
-  const ast = parseAst(declaration, { lang: 'ts' }) as unknown as {
-    body: readonly Statement[];
-  };
+}> {
+  const { program } = await parse('module.ts', declaration, { lang: 'ts' });
+  const statements: unknown = program.body;
   const names = new Set<string>();
   const reexports: Reexport[] = [];
-  for (const node of ast.body) {
+  for (const node of statements as readonly Statement[]) {
     if (node.type === 'ExportNamedDeclaration') {
-      if (node.declaration) {
-        const id =
-          node.declaration.id?.name ??
-          node.declaration.declarations?.[0]?.id?.name;
-        if (id) {
-          names.add(id);
-          reexports.push({ names: [id], star: false });
-        }
+      const id =
+        node.declaration?.id?.name ??
+        node.declaration?.declarations?.[0]?.id?.name;
+      if (id) {
+        names.add(id);
+        reexports.push({ names: [id], star: false });
       }
       for (const s of node.specifiers ?? []) {
         const exported = s.exported.name ?? s.exported.value ?? '';
@@ -64,6 +64,8 @@ function scanExports(declaration: string): {
       reexports.push({ names: ['default'], star: false });
     } else if (node.type === 'ExportAllDeclaration' && node.source) {
       reexports.push({ names: [], star: true, specifier: node.source.value });
+    } else {
+      // Other statements add no export name for the scan to record.
     }
   }
   return { names, reexports };
@@ -102,8 +104,11 @@ const HOOKS: readonly {
  * `declaration` and whose entry is `moduleFile` (`./module.mjs`): the module's public types plus
  * `#app` / `@nuxt/schema` hooks and runtime config shims.
  */
-export function typesEntry(declaration: string, moduleFile: string): string {
-  const { names, reexports } = scanExports(declaration);
+export async function typesEntry(
+  declaration: string,
+  moduleFile: string,
+): Promise<string> {
+  const { names, reexports } = await scanExports(declaration);
   const schemaImports: string[] = [];
   const moduleImports: string[] = [];
   const appShims: string[] = [];
@@ -131,35 +136,35 @@ export function typesEntry(declaration: string, moduleFile: string): string {
     .filter((e) => e.star)
     .map((e) => `\nexport * from '${e.specifier ?? moduleFile}'`);
   const text = `
-  ${schemaImports.length ? `import type { ${schemaImports.join(', ')} } from '@nuxt/schema'` : ''}
+  ${schemaImports.length > 0 ? `import type { ${schemaImports.join(', ')} } from '@nuxt/schema'` : ''}
 
-${moduleImports.length ? `import type { ${moduleImports.join(', ')} } from '${moduleFile}'` : ''}
+${moduleImports.length > 0 ? `import type { ${moduleImports.join(', ')} } from '${moduleFile}'` : ''}
 
-${appShims.length ? `declare module '#app' {\n${appShims.join('\n')}\n}\n` : ''}
-${schemaShims.length ? `declare module '@nuxt/schema' {\n${schemaShims.join('\n')}\n}\n` : ''}
-${moduleExports.length ? `\n${moduleExports.join('\n')}` : ''}
+${appShims.length > 0 ? `declare module '#app' {\n${appShims.join('\n')}\n}\n` : ''}
+${schemaShims.length > 0 ? `declare module '@nuxt/schema' {\n${schemaShims.join('\n')}\n}\n` : ''}
+${moduleExports.length > 0 ? `\n${moduleExports.join('\n')}` : ''}
 ${named.join('')}
 ${stars.join('')}
 `;
-  return `${text.trim().replace(/[\n\r]{3,}/g, '\n\n')}\n`;
+  return `${text.trim().replaceAll(/[\n\r]{3,}/g, '\n\n')}\n`;
 }
 
 /**
  * Writes `types.d.mts` (`types.d.ts` for a `.js` build) next to the module, when the manifest of the
  * package at `root` names it (see `namesFile`) and the module does not ship its own.
  */
-export function writeTypesEntry(
+export async function writeTypesEntry(
   root: string,
   outDir: string,
   extension: string,
-): void {
+): Promise<void> {
   const mjs = extension === '.mjs';
   // Paired with the module's own declaration extension: `module.mjs` → `types.d.mts`, `module.js` → `types.d.ts`.
   const file = join(outDir, mjs ? 'types.d.mts' : 'types.d.ts');
-  if (existsSync(file) || !namesFile(root, file)) return;
-  const declaration = readFileSync(
+  if ((await exists(file)) || !(await namesFile(root, file))) return;
+  const declaration = await readFile(
     join(outDir, mjs ? 'module.d.mts' : 'module.d.ts'),
     'utf8',
   );
-  writeFileSync(file, typesEntry(declaration, `./module${extension}`));
+  await writeFile(file, await typesEntry(declaration, `./module${extension}`));
 }

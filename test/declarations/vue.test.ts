@@ -1,27 +1,28 @@
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import path from 'node:path';
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
 
 import { FIXTURE_TSCONFIG, fixture } from '../utils/fixture.js';
 import { requiredVueTools, vueTools } from '../../src/declarations/vue.js';
+
+const { join } = path;
 
 afterEach(() => {
   jest.resetModules();
 });
 
 describe('vueTools', () => {
-  it("loads the TypeScript vue-tsc runs on, not the package's own copy", () => {
+  it("loads the TypeScript vue-tsc runs on, not the package's own copy", async () => {
     const vueTsc = createRequire(import.meta.url).resolve(
       'vue-tsc/package.json',
     );
-    expect(vueTools(fixture({ 'package.json': '{}' }))?.ts).toBe(
-      createRequire(vueTsc)('typescript'),
-    );
+    const tools = await vueTools(await fixture({ 'package.json': '{}' }));
+    expect(tools?.ts).toBe(createRequire(vueTsc)('typescript'));
   });
 
-  it('creates a program that reads the .vue files the sources import', () => {
-    const root = fixture({
+  it('creates a program that reads the .vue files the sources import', async () => {
+    const root = await fixture({
       'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
       'tsconfig.json': JSON.stringify({
         ...JSON.parse(FIXTURE_TSCONFIG),
@@ -31,7 +32,7 @@ describe('vueTools', () => {
         '<script setup lang="ts">\nconst label: string = 1;\n</script>\n',
       'src/index.ts': 'export { default as Comp } from "./Comp.vue";\n',
     });
-    const tools = vueTools(root);
+    const tools = await vueTools(root);
     const tsconfig = join(root, 'tsconfig.json');
     const options = {
       strict: true,
@@ -58,13 +59,14 @@ describe('vueTools', () => {
     }));
     const { vueTools: withoutVueTsc } =
       await import('../../src/declarations/vue.js');
-    expect(withoutVueTsc(tmpdir())).toBeUndefined();
+    expect(await withoutVueTsc(tmpdir())).toBeUndefined();
   });
 });
 
 describe('requiredVueTools', () => {
-  it('returns the tools when vue-tsc is installed', () => {
-    expect(requiredVueTools(tmpdir(), 'typing .vue files').ts).toBeDefined();
+  it('returns the tools when vue-tsc is installed', async () => {
+    const tools = await requiredVueTools(tmpdir(), 'typing .vue files');
+    expect(tools.ts).toBeDefined();
   });
 
   it('names what to install when vue-tsc is not', async () => {
@@ -77,12 +79,12 @@ describe('requiredVueTools', () => {
     }));
     const { requiredVueTools: withoutVueTsc } =
       await import('../../src/declarations/vue.js');
-    expect(() =>
+    await expect(
       withoutVueTsc(
         tmpdir(),
         'declarations: .vue sources are typed by vue-tsc',
       ),
-    ).toThrow(
+    ).rejects.toThrow(
       'declarations: .vue sources are typed by vue-tsc; install vue-tsc',
     );
   });

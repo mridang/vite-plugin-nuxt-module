@@ -1,12 +1,6 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import nodePath from 'node:path';
 import { afterEach, describe, expect, it } from '@jest/globals';
 
 import {
@@ -19,18 +13,22 @@ import {
   specifierEdits,
 } from '../src/specifiers.js';
 
+const { dirname, join } = nodePath;
+
 const dirs: string[] = [];
-function tree(files: Record<string, string>): string {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'nuxt-plugin-test-')));
+async function tree(files: Record<string, string>): Promise<string> {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), 'nuxt-plugin-test-')),
+  );
   dirs.push(root);
   for (const [path, content] of Object.entries(files)) {
-    mkdirSync(dirname(join(root, path)), { recursive: true });
-    writeFileSync(join(root, path), content);
+    await mkdir(dirname(join(root, path)), { recursive: true });
+    await writeFile(join(root, path), content);
   }
   return root;
 }
-afterEach(() => {
-  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+afterEach(async () => {
+  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
 });
 
 const layout = {
@@ -57,11 +55,11 @@ describe('runtimeOutName', () => {
 });
 
 describe('rewriteSpecifier', () => {
-  it('adds the per-file extension to a runtime-internal import', () => {
-    const root = tree(layout);
+  it('adds the per-file extension to a runtime-internal import', async () => {
+    const root = await tree(layout);
     const scope = { runtimeDir: join(root, 'src/runtime'), entries: {} };
     expect(
-      rewriteSpecifier(
+      await rewriteSpecifier(
         '../shared/b',
         join(root, 'src/runtime/plugins/a.ts'),
         scope,
@@ -69,14 +67,14 @@ describe('rewriteSpecifier', () => {
     ).toBe('../shared/b.js');
   });
 
-  it("points a runtime import of a bundled entry at the entry's output", () => {
-    const root = tree(layout);
+  it("points a runtime import of a bundled entry at the entry's output", async () => {
+    const root = await tree(layout);
     const scope = {
       runtimeDir: join(root, 'src/runtime'),
       entries: { [join(root, 'src/utils/headers.ts')]: 'utils/headers.mjs' },
     };
     expect(
-      rewriteSpecifier(
+      await rewriteSpecifier(
         '../../utils/headers',
         join(root, 'src/runtime/plugins/a.ts'),
         scope,
@@ -84,14 +82,14 @@ describe('rewriteSpecifier', () => {
     ).toBe('../../utils/headers.mjs');
   });
 
-  it('points a runtime import of the module at the module output', () => {
-    const root = tree(layout);
+  it('points a runtime import of the module at the module output', async () => {
+    const root = await tree(layout);
     const scope = {
       runtimeDir: join(root, 'src/runtime'),
       entries: { [join(root, 'src/module.ts')]: 'module.js' },
     };
     expect(
-      rewriteSpecifier(
+      await rewriteSpecifier(
         '../../module',
         join(root, 'src/runtime/plugins/a.ts'),
         scope,
@@ -99,11 +97,11 @@ describe('rewriteSpecifier', () => {
     ).toBe('../../module.js');
   });
 
-  it('leaves an import outside the runtime that is not an entry untouched', () => {
-    const root = tree(layout);
+  it('leaves an import outside the runtime that is not an entry untouched', async () => {
+    const root = await tree(layout);
     const scope = { runtimeDir: join(root, 'src/runtime'), entries: {} };
     expect(
-      rewriteSpecifier(
+      await rewriteSpecifier(
         '../../other',
         join(root, 'src/runtime/plugins/a.ts'),
         scope,
@@ -111,21 +109,21 @@ describe('rewriteSpecifier', () => {
     ).toBe('../../other');
   });
 
-  it('keeps a .vue import and its query', () => {
-    const root = tree(layout);
+  it('keeps a .vue import and its query', async () => {
+    const root = await tree(layout);
     expect(
-      rewriteSpecifier(
+      await rewriteSpecifier(
         '../components/C.vue?raw',
         join(root, 'src/runtime/plugins/a.ts'),
       ),
     ).toBe('../components/C.vue?raw');
   });
 
-  it('points an import of a runtime stylesheet at the CSS it compiles to', () => {
-    const root = tree({ ...layout, 'src/runtime/assets/main.scss': '' });
+  it('points an import of a runtime stylesheet at the CSS it compiles to', async () => {
+    const root = await tree({ ...layout, 'src/runtime/assets/main.scss': '' });
     const scope = { runtimeDir: join(root, 'src/runtime'), entries: {} };
     expect(
-      rewriteSpecifier(
+      await rewriteSpecifier(
         '../assets/main.scss',
         join(root, 'src/runtime/plugins/a.ts'),
         scope,
@@ -133,11 +131,11 @@ describe('rewriteSpecifier', () => {
     ).toBe('../assets/main.css');
   });
 
-  it('leaves an import of a Sass partial untouched', () => {
-    const root = tree({ ...layout, 'src/runtime/assets/_vars.scss': '' });
+  it('leaves an import of a Sass partial untouched', async () => {
+    const root = await tree({ ...layout, 'src/runtime/assets/_vars.scss': '' });
     const scope = { runtimeDir: join(root, 'src/runtime'), entries: {} };
     expect(
-      rewriteSpecifier(
+      await rewriteSpecifier(
         '../assets/_vars.scss',
         join(root, 'src/runtime/plugins/a.ts'),
         scope,
@@ -145,18 +143,18 @@ describe('rewriteSpecifier', () => {
     ).toBe('../assets/_vars.scss');
   });
 
-  it('leaves a package import untouched', () => {
-    expect(rewriteSpecifier('vue', '/x/a.ts')).toBe('vue');
+  it('leaves a package import untouched', async () => {
+    expect(await rewriteSpecifier('vue', '/x/a.ts')).toBe('vue');
   });
 
-  it('rewrites entry imports inside declarations too', () => {
-    const root = tree(layout);
+  it('rewrites entry imports inside declarations too', async () => {
+    const root = await tree(layout);
     const scope = {
       runtimeDir: join(root, 'src/runtime'),
       entries: { [join(root, 'src/utils/headers.ts')]: 'utils/headers.mjs' },
     };
     expect(
-      rewriteDeclarationImports(
+      await rewriteDeclarationImports(
         `import { x } from "../../utils/headers";`,
         join(root, 'src/runtime/plugins/a.d.ts'),
         scope,
@@ -166,11 +164,13 @@ describe('rewriteSpecifier', () => {
 });
 
 describe('rewriteImports', () => {
-  it('rewrites static, dynamic and re-export specifiers of a module', () => {
-    const root = tree(layout);
+  it('rewrites static, dynamic and re-export specifiers of a module', async () => {
+    const root = await tree(layout);
     const code =
       'import "../shared/b";\nexport * from "../shared/b";\nconst m = () => import("../shared/b");\n';
-    expect(rewriteImports(code, join(root, 'src/runtime/plugins/a.ts'))).toBe(
+    expect(
+      await rewriteImports(code, join(root, 'src/runtime/plugins/a.ts')),
+    ).toBe(
       'import "../shared/b.js";\nexport * from "../shared/b.js";\nconst m = () => import("../shared/b.js");\n',
     );
   });
@@ -182,9 +182,9 @@ describe('sourceFileOf', () => {
     ['src/runtime/shared/b.js', 'src/runtime/shared/b.ts'],
     ['src/runtime/components/C.vue', 'src/runtime/components/C.vue'],
     ['src/runtime/missing', undefined],
-  ])('finds the source of %s', (target, expected) => {
-    const root = tree(layout);
-    expect(sourceFileOf(join(root, target))).toBe(
+  ])('finds the source of %s', async (target, expected) => {
+    const root = await tree(layout);
+    expect(await sourceFileOf(join(root, target))).toBe(
       expected && join(root, expected),
     );
   });
@@ -193,35 +193,32 @@ describe('sourceFileOf', () => {
 describe('specifierEdits', () => {
   const to = (spec: string) => (spec.startsWith('./') ? `.${spec}` : undefined);
 
-  it('finds the specifiers of imports, re-exports, dynamic imports and import types of a module', () => {
+  it('finds the specifiers of imports, re-exports, dynamic imports and import types of a module', async () => {
     const code =
       'import a from "./a";\nexport * from "./b";\nexport { c } from "./c";\nconst d = () => import("./d");\nimport e from "pkg";\n';
-    expect(applyEdits(code, specifierEdits(code, 'js', to))).toBe(
+    expect(applyEdits(code, await specifierEdits(code, 'js', to))).toBe(
       'import a from "../a";\nexport * from "../b";\nexport { c } from "../c";\nconst d = () => import("../d");\nimport e from "pkg";\n',
     );
   });
 
-  it('finds the specifiers of a declaration, import types included, and keeps their quotes', () => {
+  it('finds the specifiers of a declaration, import types included, and keeps their quotes', async () => {
     const code =
       'import type { A } from \'./a\';\nexport declare const b: import("./b").B;\n';
-    expect(applyEdits(code, specifierEdits(code, 'dts', to))).toBe(
+    expect(applyEdits(code, await specifierEdits(code, 'dts', to))).toBe(
       'import type { A } from \'../a\';\nexport declare const b: import("../b").B;\n',
     );
   });
 
-  it('leaves strings that merely look like imports alone', () => {
+  it('leaves strings that merely look like imports alone', async () => {
     const code =
       'const text = \'from "./a"\';\n// import "./b"\nexport const c = import_("./c");\n';
-    expect(applyEdits(code, specifierEdits(code, 'js', to))).toBe(code);
+    expect(applyEdits(code, await specifierEdits(code, 'js', to))).toBe(code);
   });
 
-  it('writes a specifier with a quote in it as a JSON string', () => {
+  it('writes a specifier with a quote in it as a JSON string', async () => {
     const code = "import a from './a';\n";
     expect(
-      applyEdits(
-        code,
-        specifierEdits(code, 'js', () => "./it's"),
-      ),
+      applyEdits(code, await specifierEdits(code, 'js', () => "./it's")),
     ).toBe('import a from "./it\'s";\n');
   });
 });

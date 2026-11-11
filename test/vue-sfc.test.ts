@@ -1,12 +1,6 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import nodePath from 'node:path';
 import { afterEach, describe, expect, it } from '@jest/globals';
 
 import {
@@ -15,18 +9,22 @@ import {
   vueTransformer,
 } from '../src/vue-sfc.js';
 
+const { dirname, join } = nodePath;
+
 const dirs: string[] = [];
-function tree(files: Record<string, string>): string {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'nuxt-plugin-test-')));
+async function tree(files: Record<string, string>): Promise<string> {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), 'nuxt-plugin-test-')),
+  );
   dirs.push(root);
   for (const [path, content] of Object.entries(files)) {
-    mkdirSync(dirname(join(root, path)), { recursive: true });
-    writeFileSync(join(root, path), content);
+    await mkdir(dirname(join(root, path)), { recursive: true });
+    await writeFile(join(root, path), content);
   }
   return root;
 }
-afterEach(() => {
-  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+afterEach(async () => {
+  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
 });
 
 /** A fake `vue-sfc-transformer` at `dir` whose loader names where it was installed. */
@@ -53,25 +51,25 @@ const fakeSass = {
 };
 
 describe('dependencyChain', () => {
-  it("follows each package from the previous one's install directory", () => {
-    const root = tree({
+  it("follows each package from the previous one's install directory", async () => {
+    const root = await tree({
       'package.json': '{}',
       'node_modules/builder/package.json': '{}',
       'node_modules/builder/node_modules/inner/package.json': '{}',
     });
-    expect(dependencyChain(root, ['builder', 'inner'])).toEqual([
+    expect(await dependencyChain(root, ['builder', 'inner'])).toEqual([
       root,
       join(root, 'node_modules/builder'),
       join(root, 'node_modules/builder/node_modules/inner'),
     ]);
   });
 
-  it('finds a later package the module installs itself when an earlier one is missing', () => {
-    const root = tree({
+  it('finds a later package the module installs itself when an earlier one is missing', async () => {
+    const root = await tree({
       'package.json': '{}',
       'node_modules/inner/package.json': '{}',
     });
-    expect(dependencyChain(root, ['missing', 'inner'])).toEqual([
+    expect(await dependencyChain(root, ['missing', 'inner'])).toEqual([
       root,
       join(root, 'node_modules/inner'),
     ]);
@@ -80,14 +78,14 @@ describe('dependencyChain', () => {
 
 describe('vueTransformer', () => {
   it('fails naming vue-sfc-transformer when the module does not install it', async () => {
-    const root = tree({ 'package.json': '{}' });
+    const root = await tree({ 'package.json': '{}' });
     await expect(vueTransformer(root)).rejects.toThrow(
       /install vue-sfc-transformer/,
     );
   });
 
   it("prefers the module's own vue-sfc-transformer over the builder's", async () => {
-    const root = tree({
+    const root = await tree({
       'package.json': '{}',
       ...transformer('node_modules/vue-sfc-transformer', 'own'),
       'node_modules/@nuxt/module-builder/package.json': '{}',
@@ -96,11 +94,12 @@ describe('vueTransformer', () => {
         'mb',
       ),
     });
-    expect((await vueTransformer(root)).vueLoader).toBe('own');
+    const loaded = await vueTransformer(root);
+    expect(loaded.vueLoader).toBe('own');
   });
 
   it('falls back to the copy nuxt-module-build reaches through its own dependencies', async () => {
-    const root = tree({
+    const root = await tree({
       'package.json': '{}',
       'node_modules/@nuxt/module-builder/package.json': '{}',
       'node_modules/@nuxt/module-builder/node_modules/unbuild/package.json':
@@ -112,13 +111,14 @@ describe('vueTransformer', () => {
         'mkdist',
       ),
     });
-    expect((await vueTransformer(root)).vueLoader).toBe('mkdist');
+    const loaded = await vueTransformer(root);
+    expect(loaded.vueLoader).toBe('mkdist');
   });
 });
 
 describe('sfcSnippetLoader', () => {
   it('strips TypeScript from a template expression snippet', async () => {
-    const [out] = await sfcSnippetLoader(tree({ 'package.json': '{}' }))({
+    const [out] = await sfcSnippetLoader(await tree({ 'package.json': '{}' }))({
       extension: '.ts',
       getContents: () =>
         "($attrs['data-slot'] as string | undefined) ?? 'root'",
@@ -127,7 +127,7 @@ describe('sfcSnippetLoader', () => {
   });
 
   it('returns JS the template loader accepts', async () => {
-    const [out] = await sfcSnippetLoader(tree({ 'package.json': '{}' }))({
+    const [out] = await sfcSnippetLoader(await tree({ 'package.json': '{}' }))({
       extension: '.ts',
       getContents: () => 'x!',
     });
@@ -135,20 +135,22 @@ describe('sfcSnippetLoader', () => {
   });
 
   it("compiles a Sass style block to CSS with the module's own Sass", async () => {
-    const root = tree({ 'package.json': '{}', ...fakeSass });
+    const root = await tree({ 'package.json': '{}', ...fakeSass });
     const [out] = await sfcSnippetLoader(root)({
       extension: '.scss',
       srcPath: join(root, 'src/runtime/C.vue.scss'),
       getContents: () => 'a { b: c }',
     });
+    const scssUrl = new URL(`file://${join(root, 'src/runtime/C.vue.scss')}`)
+      .href;
     expect(out).toEqual({
-      contents: `/* scss ${new URL(`file://${join(root, 'src/runtime/C.vue.scss')}`).href} */ a { b: c }`,
+      contents: `/* scss ${scssUrl} */ a { b: c }`,
       extension: '.css',
     });
   });
 
   it('compiles an indented-syntax style block as such', async () => {
-    const root = tree({ 'package.json': '{}', ...fakeSass });
+    const root = await tree({ 'package.json': '{}', ...fakeSass });
     const [out] = await sfcSnippetLoader(root)({
       extension: '.sass',
       getContents: () => 'a\n  b: c',
@@ -157,7 +159,7 @@ describe('sfcSnippetLoader', () => {
   });
 
   it('leaves plain CSS style blocks to the consuming app', async () => {
-    const root = tree({ 'package.json': '{}' });
+    const root = await tree({ 'package.json': '{}' });
     expect(
       await sfcSnippetLoader(root)({
         extension: '.css',

@@ -1,8 +1,8 @@
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import path from 'node:path';
 import type { Plugin, UserConfig } from 'vite';
 
 import { NODE_TARGET, OUT_DIR, PLUGIN_PREFIX } from './defaults.js';
+import { exists } from './exists.js';
 import { implicitDependencies } from './implicit-dependencies.js';
 import { noBuildPaths } from './no-build-paths.js';
 import { optionalTsconfig } from './nuxt-tsconfig.js';
@@ -61,13 +61,13 @@ export function nuxtModule(options: NuxtModuleOptions = {}): Plugin[] {
     apply: 'build',
     enforce: 'pre',
     async config(user) {
-      const root = resolve(user.root ?? process.cwd());
-      const o = resolveOptions(options, root, user);
+      const root = path.resolve(user.root ?? process.cwd());
+      const o = await resolveOptions(options, root, user);
       resolved = o;
       if (o.prepare) await prepareModule(root, o.entry.module ?? '');
       // A module's tsconfig usually extends `.nuxt/tsconfig.json`, which only a prepare writes.
-      optionalTsconfig(root, o.tsconfig, o.dts || o.prepare);
-      return buildConfig(o, user, logged.customLogger, outcome);
+      await optionalTsconfig(root, o.tsconfig, o.dts || o.prepare);
+      return await buildConfig(o, user, logged.customLogger, outcome);
     },
   };
 
@@ -87,18 +87,18 @@ export function nuxtModule(options: NuxtModuleOptions = {}): Plugin[] {
  * Nuxt packages and the Node built-ins external, warnings as errors. A setting the project's own
  * Vite config makes (`build.outDir`, ...) is left to it.
  */
-export function buildConfig(
+export async function buildConfig(
   o: ResolvedOptions,
   user: UserConfig,
   customLogger: NonNullable<UserConfig['customLogger']>,
   outcome: BuildOutcome,
-): UserConfig {
+): Promise<UserConfig> {
   const policy = failOnWarnings(o.allowWarnings, outcome);
-  const tsconfig = packageTsconfig(o.root, o.tsconfig);
+  const tsconfig = await packageTsconfig(o.root, o.tsconfig);
   return {
     // The JS compiles with the same tsconfig as the types (decorators, class fields), not with
     // whichever tsconfig.json is nearest each file. Without one, Vite looks for the nearest itself.
-    ...(tsconfig && existsSync(tsconfig) ? { tsconfig } : {}),
+    ...(tsconfig && (await exists(tsconfig)) ? { tsconfig } : {}),
     ...(user.customLogger ? {} : { customLogger }),
     ...(user.publicDir === undefined ? { publicDir: false } : {}),
     // Node packages resolve like Node (builtins real, `node` condition): Vite's SSR mode.

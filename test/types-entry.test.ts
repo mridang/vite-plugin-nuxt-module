@@ -3,9 +3,9 @@ import { describe, expect, it } from '@jest/globals';
 import { typesEntry } from '../src/types-entry.js';
 
 describe('typesEntry', () => {
-  it('derives ModuleOptions from the module when it exports none', () => {
+  it('derives ModuleOptions from the module when it exports none', async () => {
     expect(
-      typesEntry(
+      await typesEntry(
         'declare const _default: unknown;\nexport default _default;\n',
         './module.mjs',
       ),
@@ -14,8 +14,8 @@ describe('typesEntry', () => {
     );
   });
 
-  it("re-exports the module's own ModuleOptions as a type", () => {
-    const text = typesEntry(
+  it("re-exports the module's own ModuleOptions as a type", async () => {
+    const text = await typesEntry(
       'export interface ModuleOptions { a: string }\n',
       './module.mjs',
     );
@@ -25,8 +25,8 @@ describe('typesEntry', () => {
     ]).toEqual([true, false]);
   });
 
-  it("extends the Nuxt hooks with the module's", () => {
-    const text = typesEntry(
+  it("extends the Nuxt hooks with the module's", async () => {
+    const text = await typesEntry(
       'export interface ModuleOptions {}\nexport interface ModuleRuntimeHooks {}\nexport interface ModuleHooks {}\n',
       './module.mjs',
     );
@@ -40,9 +40,9 @@ describe('typesEntry', () => {
     ]).toEqual([true, true]);
   });
 
-  it('re-exports star exports from their own module', () => {
+  it('re-exports star exports from their own module', async () => {
     expect(
-      typesEntry(
+      await typesEntry(
         'export interface ModuleOptions {}\nexport * from "./shared/types.mjs";\n',
         './module.mjs',
       ),

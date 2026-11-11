@@ -1,7 +1,8 @@
-import { existsSync, statSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { stat } from 'node:fs/promises';
+import path from 'node:path';
 
 import { NUXT_BUILD_DIR, PROJECT_TSCONFIG } from './defaults.js';
+import { exists, firstFound } from './exists.js';
 import { anyTypeScript } from './resolve.js';
 import { packageTsconfig, type TS } from './tsconfig.js';
 
@@ -10,7 +11,10 @@ interface TsconfigJson {
   readonly extends?: unknown;
 }
 
-const isFile = (p: string): boolean => existsSync(p) && statSync(p).isFile();
+const isFile = (p: string): Promise<boolean> =>
+  stat(p)
+    .then((info) => info.isFile())
+    .catch(() => false);
 
 /**
  * The first file `file` extends or references by path (recursively) that does not exist, or `undefined` when the
@@ -18,33 +22,39 @@ const isFile = (p: string): boolean => existsSync(p) && statSync(p).isFile();
  * Each file is read as TypeScript reads it (comments, trailing commas, a byte-order mark), without applying its
  * chain, which is what is checked; package `extends` (`"@nuxt/tsconfig"`) are left to TypeScript.
  */
-export function missingTsconfigFile(ts: TS, file: string): string | undefined {
-  if (!isFile(file)) return file;
+export async function missingTsconfigFile(
+  ts: TS,
+  file: string,
+): Promise<string | undefined> {
+  if (!(await isFile(file))) return file;
   const { config, error } = ts.readConfigFile(file, ts.sys.readFile);
   if (error)
     throw new Error(
       `cannot read ${file}: ${ts.flattenDiagnosticMessageText(error.messageText, '\n')}`,
     );
   const json = (config ?? {}) as TsconfigJson;
-  for (const ref of json.references ?? []) {
-    const p = resolve(dirname(file), ref.path);
-    if (
-      !isFile(p) &&
-      !isFile(`${p}.json`) &&
-      !isFile(join(p, PROJECT_TSCONFIG))
-    )
-      return p;
-  }
+  const missingReference = await firstFound(
+    json.references ?? [],
+    async (ref) => {
+      const p = path.resolve(path.dirname(file), ref.path);
+      const found = await Promise.all([
+        isFile(p),
+        isFile(`${p}.json`),
+        isFile(path.join(p, PROJECT_TSCONFIG)),
+      ]);
+      return found.some(Boolean) ? undefined : p;
+    },
+  );
+  if (missingReference) return missingReference;
   const ext = json.extends;
-  for (const e of Array.isArray(ext) ? ext : ext ? [ext] : []) {
-    if (typeof e !== 'string' || !(e.startsWith('.') || isAbsolute(e)))
-      continue;
-    const p = resolve(dirname(file), e);
-    const target = isFile(p) || p.endsWith('.json') ? p : `${p}.json`;
-    const missing = missingTsconfigFile(ts, target);
-    if (missing) return missing;
-  }
-  return undefined;
+  const extended: unknown[] = Array.isArray(ext) ? ext : [ext];
+  return firstFound(extended, async (e) => {
+    if (typeof e !== 'string' || !(e.startsWith('.') || path.isAbsolute(e)))
+      return undefined;
+    const p = path.resolve(path.dirname(file), e);
+    const target = (await isFile(p)) || p.endsWith('.json') ? p : `${p}.json`;
+    return missingTsconfigFile(ts, target);
+  });
 }
 
 /** Why the build cannot type the module with `tsconfig`, whose chain names `missing`, and what fixes it. */
@@ -53,9 +63,9 @@ function brokenTsconfigMessage(
   tsconfig: string,
   missing: string,
 ): string {
-  const generated = missing.split(sep).includes(NUXT_BUILD_DIR);
+  const generated = missing.split(path.sep).includes(NUXT_BUILD_DIR);
   return [
-    `nuxtModule: ${relative(root, tsconfig) || tsconfig} needs ${relative(root, missing) || missing}, which does not exist.`,
+    `nuxtModule: ${path.relative(root, tsconfig) || tsconfig} needs ${path.relative(root, missing) || missing}, which does not exist.`,
     generated
       ? 'It is written by `nuxi prepare`: run that before the build, or set `prepare: true` to have the build run it.'
       : 'Create it, or point `tsconfig` at a tsconfig whose chain is complete.',
@@ -67,14 +77,14 @@ function brokenTsconfigMessage(
  * `.nuxt/tsconfig.json` (Nuxt's aliases, `#app`, the hoisted `@nuxt/schema`): a build without it would type the module
  * with different options than the editor does, so a broken chain fails with what to run instead of being guessed at.
  */
-export function effectiveTsconfig(
+export async function effectiveTsconfig(
   root: string,
   tsconfig: string | undefined,
-): string {
-  const base = packageTsconfig(root, tsconfig);
+): Promise<string> {
+  const base = await packageTsconfig(root, tsconfig);
   if (!base)
     throw new Error(`nuxtModule: no tsconfig found in ${root} or above it`);
-  const missing = missingTsconfigFile(anyTypeScript(root), base);
+  const missing = await missingTsconfigFile(await anyTypeScript(root), base);
   if (missing) throw new Error(brokenTsconfigMessage(root, base, missing));
   return base;
 }
@@ -83,12 +93,12 @@ export function effectiveTsconfig(
  * {@link effectiveTsconfig}, or `undefined` when the module has no tsconfig at all and needs none (no declarations):
  * the transpiler then finds the nearest one itself.
  */
-export function optionalTsconfig(
+export async function optionalTsconfig(
   root: string,
   tsconfig: string | undefined,
   required: boolean,
-): string | undefined {
-  const base = packageTsconfig(root, tsconfig);
-  if (!required && (!base || !existsSync(base))) return undefined;
+): Promise<string | undefined> {
+  const base = await packageTsconfig(root, tsconfig);
+  if (!required && (!base || !(await exists(base)))) return undefined;
   return effectiveTsconfig(root, tsconfig);
 }

@@ -1,11 +1,11 @@
-import { resolve } from 'node:path';
+import path from 'node:path';
 
 /** Entry files, listed (each named after its file) or as an `{ outputName: file }` map (names may contain `/`). */
 export type EntryOption = readonly string[] | Readonly<Record<string, string>>;
 
 /** The output name of an entry listed by file: its file name without directory or extension. */
 export function entryName(file: string): string {
-  return file.replace(/^.*\/|\.[^.]+$/g, '');
+  return file.replaceAll(/^.*\/|\.[^.]+$/g, '');
 }
 
 /**
@@ -18,10 +18,9 @@ export function namedEntries(entry: EntryOption): Record<string, string> {
   const named: Record<string, string> = {};
   for (const file of entry) {
     const name = entryName(file);
-    const taken = named[name];
-    if (taken !== undefined)
+    if (Object.hasOwn(named, name))
       throw new Error(
-        `entry: ${taken} and ${file} are both named "${name}"; name them with the { name: file } form`,
+        `entry: ${named[name]} and ${file} are both named "${name}"; name them with the { name: file } form`,
       );
     named[name] = file;
   }
@@ -33,7 +32,7 @@ export function namedEntries(entry: EntryOption): Record<string, string> {
  * built with `node:path` (backslashes on Windows) compares equal to the id of the same file.
  */
 export function posixPath(path: string): string {
-  return path.replace(/\\/g, '/');
+  return path.replaceAll('\\', '/');
 }
 
 /** The same entries with their files resolved against `root`, spelled like Vite's module ids. */
@@ -44,7 +43,7 @@ export function resolvedEntries(
   return Object.fromEntries(
     Object.entries(entries).map(([name, file]) => [
       name,
-      posixPath(resolve(root, file)),
+      posixPath(path.resolve(root, file)),
     ]),
   );
 }

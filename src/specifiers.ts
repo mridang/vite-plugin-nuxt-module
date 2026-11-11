@@ -1,15 +1,9 @@
-import { existsSync, statSync } from 'node:fs';
-import {
-  basename,
-  dirname,
-  extname,
-  join,
-  posix,
-  relative,
-  resolve,
-  sep,
-} from 'node:path';
-import { parseAst } from 'vite';
+import { stat } from 'node:fs/promises';
+import path from 'node:path';
+import { parse } from 'vite';
+
+const { basename, dirname, extname, join, posix, relative, resolve, sep } =
+  path;
 
 /** A declaration file name. */
 export const DECLARATION_RE = /\.d\.[cm]?ts$/;
@@ -58,7 +52,18 @@ export interface SpecifierScope {
   readonly entries: Readonly<Record<string, string>>;
 }
 
-const isFile = (p: string): boolean => existsSync(p) && statSync(p).isFile();
+const isFile = (p: string): Promise<boolean> =>
+  stat(p)
+    .then((info) => info.isFile())
+    .catch(() => false);
+
+/** The first of `files` that is a file, in order. */
+async function firstFile(
+  files: readonly string[],
+): Promise<string | undefined> {
+  const found = await Promise.all(files.map((file) => isFile(file)));
+  return files.find((_, i) => found[i]);
+}
 
 /** TypeScript extensions a `.js` specifier can stand for (TS NodeNext style: `./x.js` for `x.ts`). */
 const TS_EXTS = ['.ts', '.tsx', '.mts', '.cts'];
@@ -68,17 +73,19 @@ const TS_EXTS = ['.ts', '.tsx', '.mts', '.cts'];
  * resolution finds it: the file as written, its TypeScript source when written as `.js`, else with
  * each source extension, else as a directory's index.
  */
-export function sourceFileOf(target: string): string | undefined {
-  if (isFile(target)) return target;
+export async function sourceFileOf(
+  target: string,
+): Promise<string | undefined> {
+  if (await isFile(target)) return target;
   if (/\.[cm]?js$/.test(target)) {
-    const found = TS_EXTS.map((ts) => target.replace(/\.[cm]?js$/, ts)).find(
-      isFile,
+    const found = await firstFile(
+      TS_EXTS.map((ts) => target.replace(/\.[cm]?js$/, ts)),
     );
     if (found) return found;
   }
   return (
-    SOURCE_EXTS.map((e) => target + e).find(isFile) ??
-    SOURCE_EXTS.map((e) => join(target, `index${e}`)).find(isFile)
+    (await firstFile(SOURCE_EXTS.map((e) => target + e))) ??
+    (await firstFile(SOURCE_EXTS.map((e) => join(target, `index${e}`))))
   );
 }
 
@@ -89,13 +96,14 @@ export function sourceFileOf(target: string): string | undefined {
  * bundled entry (to that entry's output); anything else outside is left untouched. Specifiers that are not relative
  * or do not resolve are returned untouched.
  */
-export function rewriteSpecifier(
+export async function rewriteSpecifier(
   spec: string,
   fromFile: string,
   scope?: SpecifierScope,
-): string {
+): Promise<string> {
   if (!/^\.\.?(\/|$)/.test(spec)) return spec;
-  const suffix = /[?#].*$/.exec(spec)?.[0] ?? '';
+  const queryAt = spec.search(/[?#]/);
+  const suffix = queryAt < 0 ? '' : spec.slice(queryAt);
   const bare = suffix ? spec.slice(0, -suffix.length) : spec;
   const target = resolve(dirname(fromFile), bare);
   const specifierOf = (rel: string): string =>
@@ -117,15 +125,15 @@ export function rewriteSpecifier(
   };
   // `./x.js` written for `x.ts` (TS NodeNext style), or `./x.ts` itself.
   const explicit = extname(bare);
-  if (explicit && isFile(target)) {
+  if (explicit && (await isFile(target))) {
     // A Sass import names the stylesheet the runtime build compiles it to (`./theme.scss` → `./theme.css`).
-    return (/\.(?:ts|tsx|jsx|mts|cts)$/.test(explicit) &&
-      !DECLARATION_RE.test(bare)) ||
-      (SASS_RE.test(explicit) && inside(target) && !isSassPartial(target))
-      ? located(target)
-      : spec;
+    const isSourceImport =
+      /\.(?:ts|tsx|jsx|mts|cts)$/.test(explicit) && !DECLARATION_RE.test(bare);
+    const isSassImport =
+      SASS_RE.test(explicit) && inside(target) && !isSassPartial(target);
+    return isSourceImport || isSassImport ? located(target) : spec;
   }
-  const source = sourceFileOf(target);
+  const source = await sourceFileOf(target);
   if (!source) return spec;
   // `./x.js` written for a runtime `x.ts` already names the file built per file.
   if (/\.[cm]?js$/.test(explicit) && inside(source)) return spec;
@@ -170,13 +178,13 @@ function quoted(original: string, specifier: string): string {
  * every static and dynamic import, re-export and import type. `map` returns the new specifier, or nothing to leave
  * it. Found with the parser, never by pattern.
  */
-export function specifierEdits(
+export async function specifierEdits(
   code: string,
   lang: 'js' | 'dts',
-  map: (specifier: string) => string | undefined,
-): Edit[] {
-  const ast = parseAst(code, { lang }) as unknown as { body: unknown };
-  const edits: Edit[] = [];
+  map: (specifier: string) => string | undefined | Promise<string | undefined>,
+): Promise<Edit[]> {
+  const { program } = await parse('module.ts', code, { lang });
+  const found: { start: number; end: number; value: string }[] = [];
   const visit = (value: unknown): void => {
     if (!value || typeof value !== 'object') return;
     if (Array.isArray(value)) {
@@ -194,51 +202,57 @@ export function specifierEdits(
       src.start !== undefined &&
       src.end !== undefined
     ) {
-      const next = map(src.value);
-      if (next !== undefined && next !== src.value)
-        edits.push({
-          start: src.start,
-          end: src.end,
-          text: quoted(code.slice(src.start, src.end), next),
-        });
+      found.push({ start: src.start, end: src.end, value: src.value });
     }
     for (const [key, child] of Object.entries(node))
       if (key !== 'source' || !src) visit(child);
   };
-  visit(ast.body);
-  return edits;
+  visit(program.body);
+  const mapped = await Promise.all(found.map((item) => map(item.value)));
+  return found.flatMap((item, i) => {
+    const next = mapped[i];
+    return next !== undefined && next !== item.value
+      ? [
+          {
+            start: item.start,
+            end: item.end,
+            text: quoted(code.slice(item.start, item.end), next),
+          },
+        ]
+      : [];
+  });
 }
 
 /** `code` with `edits` applied. */
 export function applyEdits(code: string, edits: readonly Edit[]): string {
   return [...edits]
-    .sort((a, b) => b.start - a.start)
+    .toSorted((a, b) => b.start - a.start)
     .reduce((c, e) => c.slice(0, e.start) + e.text + c.slice(e.end), code);
 }
 
 /** Rewrites every static / dynamic import and re-export specifier of a transpiled JS module. */
-export function rewriteImports(
+export async function rewriteImports(
   code: string,
   fromFile: string,
   scope?: SpecifierScope,
-): string {
+): Promise<string> {
   return applyEdits(
     code,
-    specifierEdits(code, 'js', (spec) =>
+    await specifierEdits(code, 'js', (spec) =>
       rewriteSpecifier(spec, fromFile, scope),
     ),
   );
 }
 
 /** Same for a declaration: `from "./x"`, `import("./x")`, `import "./x"`. */
-export function rewriteDeclarationImports(
+export async function rewriteDeclarationImports(
   code: string,
   fromFile: string,
   scope?: SpecifierScope,
-): string {
+): Promise<string> {
   return applyEdits(
     code,
-    specifierEdits(code, 'dts', (spec) =>
+    await specifierEdits(code, 'dts', (spec) =>
       rewriteSpecifier(spec, fromFile, scope),
     ),
   );

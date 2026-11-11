@@ -1,8 +1,12 @@
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { readFile, realpath } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { dirname, join, resolve } from 'node:path';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type * as TypeScript from 'typescript';
+import type TypeScript from 'typescript';
+
+import { exists } from './exists.js';
+
+const { dirname, join, resolve } = path;
 
 /** A `require` that resolves like code inside the package at `root`. */
 export function requireFrom(root: string): ReturnType<typeof createRequire> {
@@ -68,11 +72,15 @@ export function exportsTarget(
   if (subpath in map) return exportTarget(map[subpath], conditions);
   const patterns = Object.keys(map)
     .filter((key) => key.includes('*'))
-    .sort((a, b) => b.indexOf('*') - a.indexOf('*'));
+    .toSorted((a, b) => b.indexOf('*') - a.indexOf('*'));
   for (const key of patterns) {
     const [prefix = '', suffix = ''] = key.split('*');
-    if (!subpath.startsWith(prefix) || !subpath.endsWith(suffix)) continue;
-    if (subpath.length < prefix.length + suffix.length) continue;
+    if (
+      !subpath.startsWith(prefix) ||
+      !subpath.endsWith(suffix) ||
+      subpath.length < prefix.length + suffix.length
+    )
+      continue;
     const match = subpath.slice(prefix.length, subpath.length - suffix.length);
     return exportTarget(map[key], conditions)?.replaceAll('*', match);
   }
@@ -84,27 +92,31 @@ export function exportsTarget(
  * from `root` upwards, the lookup `import` does (no `NODE_PATH`, no global folders, so a package
  * hoisted for another one is never picked up).
  */
-export function packageDirectory(
+export async function packageDirectory(
   name: string,
   root: string,
-): string | undefined {
+): Promise<string | undefined> {
+  const candidates: string[] = [];
   for (let dir = resolve(root); ; dir = dirname(dir)) {
-    const candidate = join(dir, 'node_modules', name);
-    if (existsSync(join(candidate, 'package.json'))) return candidate;
-    if (dirname(dir) === dir) return undefined;
+    candidates.push(join(dir, 'node_modules', name));
+    if (dirname(dir) === dir) break;
   }
+  const present = await Promise.all(
+    candidates.map((candidate) => exists(join(candidate, 'package.json'))),
+  );
+  return candidates.find((_, i) => present[i]);
 }
 
 /**
  * {@link packageDirectory} as its real path: under pnpm's symlinked layout the package's own
  * dependencies are found only from there (a tool a package brings, looked up through it).
  */
-export function realPackageDirectory(
+export async function realPackageDirectory(
   name: string,
   root: string,
-): string | undefined {
-  const dir = packageDirectory(name, root);
-  return dir === undefined ? undefined : realpathSync(dir);
+): Promise<string | undefined> {
+  const dir = await packageDirectory(name, root);
+  return dir === undefined ? undefined : realpath(dir);
 }
 
 /**
@@ -112,13 +124,16 @@ export function realPackageDirectory(
  * the package's `exports` with {@link IMPORT_CONDITIONS} (a package that exports neither its
  * `package.json` nor a `require` condition included), else its `main` and file layout.
  */
-function resolvePackageFile(specifier: string, root: string): string {
+async function resolvePackageFile(
+  specifier: string,
+  root: string,
+): Promise<string> {
   const { name, subpath } = packageSpecifier(specifier);
-  const dir = packageDirectory(name, root);
+  const dir = await packageDirectory(name, root);
   if (dir === undefined)
     throw new Error(`cannot find package ${name} from ${root}`);
   if (subpath === './package.json') return join(dir, 'package.json');
-  const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+  const pkg = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8')) as {
     exports?: unknown;
   };
   if (pkg.exports !== undefined) {
@@ -134,12 +149,12 @@ function resolvePackageFile(specifier: string, root: string): string {
 }
 
 /** `specifier` resolved from the package at `root`, or `undefined` when it is not installed there. */
-export function resolveFromRoot(
+export async function resolveFromRoot(
   specifier: string,
   root: string,
-): string | undefined {
+): Promise<string | undefined> {
   try {
-    return resolvePackageFile(specifier, root);
+    return await resolvePackageFile(specifier, root);
   } catch {
     return undefined;
   }
@@ -155,14 +170,16 @@ export async function importFromRoot<T = unknown>(
 ): Promise<T> {
   // eslint-disable-next-line no-unsanitized/method -- the specifier is a tool the package declares
   return (await import(
-    pathToFileURL(resolvePackageFile(specifier, root)).href
+    pathToFileURL(await resolvePackageFile(specifier, root)).href
   )) as T;
 }
 
 /** The TypeScript compiler the package at `root` declares (a CommonJS package, so loaded synchronously). */
-export function packageTypeScript(root: string): typeof TypeScript {
+export async function packageTypeScript(
+  root: string,
+): Promise<typeof TypeScript> {
   return requireFrom(root)(
-    resolvePackageFile('typescript', root),
+    await resolvePackageFile('typescript', root),
   ) as typeof TypeScript;
 }
 
@@ -171,8 +188,8 @@ export function packageTypeScript(root: string): typeof TypeScript {
  * work that does not depend on the version, like reading a tsconfig file as text: a package
  * whose build needs no type information need not install TypeScript for it.
  */
-export function anyTypeScript(root: string): typeof TypeScript {
-  return resolveFromRoot('typescript', root) !== undefined
-    ? packageTypeScript(root)
-    : (createRequire(import.meta.url)('typescript') as typeof TypeScript);
+export async function anyTypeScript(root: string): Promise<typeof TypeScript> {
+  return (await resolveFromRoot('typescript', root)) === undefined
+    ? (createRequire(import.meta.url)('typescript') as typeof TypeScript)
+    : packageTypeScript(root);
 }

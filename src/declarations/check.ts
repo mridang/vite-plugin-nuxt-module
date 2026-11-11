@@ -1,5 +1,10 @@
-import { relative, resolve } from 'node:path';
-import type * as TypeScript from 'typescript';
+import path from 'node:path';
+import type {
+  CompilerOptions,
+  Diagnostic,
+  FormatDiagnosticsHost,
+  ParsedCommandLine,
+} from 'typescript';
 
 import {
   CONSUMER_COMPILER_OPTIONS,
@@ -15,9 +20,9 @@ import { parsedTsconfig, type TS } from '../tsconfig.js';
 function errors(
   ts: TS,
   root: string,
-  diagnostics: readonly TypeScript.Diagnostic[],
+  diagnostics: readonly Diagnostic[],
 ): string[] {
-  const host: TypeScript.FormatDiagnosticsHost = {
+  const host: FormatDiagnosticsHost = {
     getCanonicalFileName: (file) => file,
     getCurrentDirectory: () => root,
     getNewLine: () => '\n',
@@ -38,10 +43,10 @@ function checkedProject(
   ts: TS,
   tsconfig: string,
   overrides: CompilerOverrides = {},
-): TypeScript.ParsedCommandLine {
+): ParsedCommandLine {
   return parsedTsconfig(ts, tsconfig, {
     ...CONSUMER_COMPILER_OPTIONS,
-    ...(overrides as TypeScript.CompilerOptions),
+    ...(overrides as CompilerOptions),
     noEmit: true,
     composite: false,
     incremental: false,
@@ -54,8 +59,13 @@ export function isSourceTest(
   sourceRoot: string,
   file: string,
 ): boolean {
-  const path = posixPath(relative(resolve(root, sourceRoot), file));
-  return !path.startsWith('..') && matchesAnyGlob(path, TEST_FILE_GLOBS);
+  const relativePath = posixPath(
+    path.relative(path.resolve(root, sourceRoot), file),
+  );
+  return (
+    !relativePath.startsWith('..') &&
+    matchesAnyGlob(relativePath, TEST_FILE_GLOBS)
+  );
 }
 
 /** Options of {@link sourceTypeErrors}. */
@@ -75,13 +85,13 @@ export interface SourceCheckOptions {
  * (`overrides`: the `paths` / `types` a framework hoists), since a tsconfig that sets `declaration`
  * adds the declaration diagnostics those options decide.
  */
-export function sourceTypeErrors(
+export async function sourceTypeErrors(
   root: string,
   tsconfig: string,
   options: SourceCheckOptions = {},
-): string[] {
+): Promise<string[]> {
   const { overrides, sourceRoot = SOURCE_ROOT } = options;
-  const ts = packageTypeScript(root);
+  const ts = await packageTypeScript(root);
   const project = checkedProject(ts, tsconfig, overrides);
   const program = ts.createProgram({
     rootNames: project.fileNames.filter(
@@ -103,26 +113,27 @@ export function sourceTypeErrors(
  * inside `outDir` count: the dependencies' own declarations are theirs to check. `overrides` are
  * the compiler options the declarations were emitted with on top of the tsconfig's.
  */
-export function declarationTypeErrors(
+export async function declarationTypeErrors(
   root: string,
   tsconfig: string,
   outDir: string,
   files: readonly string[],
   overrides: CompilerOverrides = {},
-): string[] {
+): Promise<string[]> {
   if (files.length === 0) return [];
-  const ts = packageTypeScript(root);
+  const ts = await packageTypeScript(root);
   const { options } = checkedProject(ts, tsconfig, overrides);
-  const program = ts.createProgram(files, {
-    ...options,
-    skipLibCheck: false,
-    rootDir: undefined,
-    declarationDir: undefined,
-    outDir: undefined,
-  });
+  const emitOptions: CompilerOptions = { ...options, skipLibCheck: false };
+  delete emitOptions.rootDir;
+  delete emitOptions.declarationDir;
+  delete emitOptions.outDir;
+  const program = ts.createProgram(files, emitOptions);
   const own = program
     .getSourceFiles()
-    .filter((sf) => !relative(resolve(outDir), sf.fileName).startsWith('..'));
+    .filter(
+      (sf) =>
+        !path.relative(path.resolve(outDir), sf.fileName).startsWith('..'),
+    );
   return errors(
     ts,
     root,

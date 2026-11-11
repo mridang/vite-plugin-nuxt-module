@@ -39,14 +39,13 @@ export function noBuildPaths(root: () => string): Plugin {
       // Output names files with forward slashes on every platform.
       const workspaceRoot = posixPath(searchForWorkspaceRoot(root()));
       assertNoBuildPaths(
-        Object.values(bundle).map((file) => [
-          file.fileName,
-          file.type === 'chunk'
-            ? file.code
-            : typeof file.source === 'string'
-              ? file.source
-              : '',
-        ]),
+        Object.values(bundle).map((file): readonly [string, string] => {
+          if (file.type === 'chunk') return [file.fileName, file.code];
+          return [
+            file.fileName,
+            typeof file.source === 'string' ? file.source : '',
+          ];
+        }),
         workspaceRoot,
       );
     },

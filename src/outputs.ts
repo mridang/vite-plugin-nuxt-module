@@ -1,9 +1,10 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import type { Plugin } from 'vite';
 
 import { emitBundledTypes } from './declarations/bundle.js';
 import { PLUGIN_PREFIX } from './defaults.js';
+import { exists, firstFound } from './exists.js';
 import type { ResolvedOptions } from './options.js';
 import { packageTypeScript, realPackageDirectory } from './resolve.js';
 import { absolutePaths, parsedTsconfig } from './tsconfig.js';
@@ -28,15 +29,16 @@ const NUXT_HOISTED_TYPES: readonly string[] = ['@nuxt/schema'];
 const HOISTED_FROM: readonly string[] = ['@nuxt/kit', 'nuxt'];
 
 /** Where a {@link NUXT_HOISTED_TYPES} package is installed: the module's own copy, else its Nuxt packages' copy. */
-function hoistedTypeDir(name: string, root: string): string | undefined {
-  const own = realPackageDirectory(name, root);
+async function hoistedTypeDir(
+  name: string,
+  root: string,
+): Promise<string | undefined> {
+  const own = await realPackageDirectory(name, root);
   if (own) return own;
-  for (const via of HOISTED_FROM) {
-    const viaDir = realPackageDirectory(via, root);
-    const dir = viaDir && realPackageDirectory(name, viaDir);
-    if (dir) return dir;
-  }
-  return undefined;
+  return firstFound(HOISTED_FROM, async (via) => {
+    const viaDir = await realPackageDirectory(via, root);
+    return viaDir ? realPackageDirectory(name, viaDir) : undefined;
+  });
 }
 
 /**
@@ -45,16 +47,21 @@ function hoistedTypeDir(name: string, root: string): string | undefined {
  * else from where its Nuxt packages have it, and `#app/nuxt`. Without them a module that depends on `@nuxt/kit` only
  * fails with TS2742 / TS2883 ("cannot be named without a reference to @nuxt/schema").
  */
-export function hoistedTypePaths(root: string): Record<string, string[]> {
+export async function hoistedTypePaths(
+  root: string,
+): Promise<Record<string, string[]>> {
   const paths: Record<string, string[]> = {};
-  for (const name of NUXT_HOISTED_TYPES) {
-    const dir = hoistedTypeDir(name, root);
+  const dirs = await Promise.all(
+    NUXT_HOISTED_TYPES.map((name) => hoistedTypeDir(name, root)),
+  );
+  for (const [i, name] of NUXT_HOISTED_TYPES.entries()) {
+    const dir = dirs[i];
     if (!dir) continue;
     paths[name] = [dir];
     paths[`${name}/*`] = [`${dir}/*`];
   }
-  const nuxt = realPackageDirectory('nuxt', root);
-  if (nuxt) paths['#app/nuxt'] = [join(nuxt, 'dist/app/nuxt')];
+  const nuxt = await realPackageDirectory('nuxt', root);
+  if (nuxt) paths['#app/nuxt'] = [path.join(nuxt, 'dist/app/nuxt')];
   return paths;
 }
 
@@ -69,36 +76,42 @@ export function hoistedTypePaths(root: string): Record<string, string[]> {
  *   through `@nuxt/kit`'s own link to it; `nuxt-module-build`'s program holds every file the prepared tsconfig
  *   includes, which reference it by name.
  */
-export function moduleDeclarationOptions(
+export async function moduleDeclarationOptions(
   root: string,
   tsconfig: string,
-): { paths?: Record<string, string[]>; types?: string[] } {
-  const ts = packageTypeScript(root);
+): Promise<{ paths?: Record<string, string[]>; types?: string[] }> {
+  const ts = await packageTypeScript(root);
   const { options } = parsedTsconfig(ts, tsconfig);
   const result: { paths?: Record<string, string[]>; types?: string[] } = {};
   const own =
     options.types ?? ts.getAutomaticTypeDirectiveNames(options, ts.sys);
-  const types = NUXT_HOISTED_TYPES.filter(
-    (n) => !own.includes(n) && realPackageDirectory(n, root),
+  const installed = await Promise.all(
+    NUXT_HOISTED_TYPES.map(
+      async (n) =>
+        !own.includes(n) && Boolean(await realPackageDirectory(n, root)),
+    ),
   );
-  if (types.length) result.types = [...own, ...types];
-  const hoisted = hoistedTypePaths(root);
-  if (Object.keys(hoisted).length) {
+  const types = NUXT_HOISTED_TYPES.filter((_, i) => installed[i]);
+  if (types.length > 0) result.types = [...own, ...types];
+  const hoisted = await hoistedTypePaths(root);
+  if (Object.keys(hoisted).length > 0) {
     result.paths = { ...hoisted, ...absolutePaths(options, tsconfig) };
   }
   return result;
 }
 
 /** `<name>.d.ts` copies of each bundled entry's `<name>.d.mts`, for consumers on `node10` resolution. */
-export function writeCompatibleDeclarations(
+export async function writeCompatibleDeclarations(
   outDir: string,
   names: readonly string[],
-): void {
-  for (const name of names) {
-    const mts = join(outDir, `${name}.d.mts`);
-    if (existsSync(mts))
-      writeFileSync(join(outDir, `${name}.d.ts`), readFileSync(mts));
-  }
+): Promise<void> {
+  await Promise.all(
+    names.map(async (name) => {
+      const mts = path.join(outDir, `${name}.d.mts`);
+      if (await exists(mts))
+        await writeFile(path.join(outDir, `${name}.d.ts`), await readFile(mts));
+    }),
+  );
 }
 
 /**
@@ -107,10 +120,10 @@ export function writeCompatibleDeclarations(
  * first (steps run in plugin order).
  */
 export function nuxtRuntime(options: () => ResolvedOptions): Plugin {
-  return afterBuild(`${PLUGIN_PREFIX}:runtime`, (config) => {
+  return afterBuild(`${PLUGIN_PREFIX}:runtime`, async (config) => {
     const o = options();
     if (!o.runtimeDir) return;
-    return buildRuntime({
+    await buildRuntime({
       root: o.root,
       entry: o.entry,
       runtimeDir: o.runtimeDir,
@@ -118,7 +131,7 @@ export function nuxtRuntime(options: () => ResolvedOptions): Plugin {
       extension: o.extension,
       dts: o.dts,
       tsconfig: o.tsconfig,
-      outDir: resolve(config.root, config.build.outDir),
+      outDir: path.resolve(config.root, config.build.outDir),
     });
   });
 }
@@ -130,9 +143,9 @@ export function nuxtRuntime(options: () => ResolvedOptions): Plugin {
 export function nuxtModuleOutputs(options: () => ResolvedOptions): Plugin {
   return afterBuild(`${PLUGIN_PREFIX}:outputs`, async (config) => {
     const o = options();
-    const outDir = resolve(config.root, config.build.outDir);
+    const outDir = path.resolve(config.root, config.build.outDir);
     if (o.dts) {
-      const tsconfig = effectiveTsconfig(o.root, o.tsconfig);
+      const tsconfig = await effectiveTsconfig(o.root, o.tsconfig);
       await emitBundledTypes({
         root: o.root,
         entry: o.entry,
@@ -145,7 +158,7 @@ export function nuxtModuleOutputs(options: () => ResolvedOptions): Plugin {
         allowWarnings: o.allowWarnings,
         sourcemap: o.sourcemap,
         sourceRoot: o.sourceRoot,
-        compilerOptions: moduleDeclarationOptions(o.root, tsconfig),
+        compilerOptions: await moduleDeclarationOptions(o.root, tsconfig),
         chunkFileNames: sharedChunkFileNames,
         plugins: o.runtimeDir
           ? [declarationRuntimeExternals(o.runtimeDir)]
@@ -153,9 +166,9 @@ export function nuxtModuleOutputs(options: () => ResolvedOptions): Plugin {
       });
       // `module.mjs` → `module.d.mts`; an entry built as `.js` would pair with `.d.ts`.
       if (o.compatible && o.extension === '.mjs')
-        writeCompatibleDeclarations(outDir, Object.keys(o.entry));
+        await writeCompatibleDeclarations(outDir, Object.keys(o.entry));
     }
     await writeModuleJson({ ...o, outDir });
-    if (o.dts) writeTypesEntry(o.root, outDir, o.extension);
+    if (o.dts) await writeTypesEntry(o.root, outDir, o.extension);
   });
 }

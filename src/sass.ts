@@ -1,6 +1,8 @@
-import { resolve } from 'node:path';
+import path from 'node:path';
 
 import { importFromRoot } from './resolve.js';
+
+const { resolve } = path;
 
 /** The Sass compilers this package can drive (`sass` or `sass-embedded`), in the order they are tried. */
 const SASS_COMPILERS: readonly string[] = ['sass', 'sass-embedded'];

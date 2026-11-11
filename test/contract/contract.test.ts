@@ -7,8 +7,8 @@
  * on the package. `test/kit-coverage.test.ts` lists every export of `@nuxt/kit` and requires each to be
  * covered by the fixture or excluded with a reason, so a new kit function forces a decision.
  */
-import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFile, rm } from 'node:fs/promises';
+import path from 'node:path';
 import { $fetch, fetch, setup } from '@nuxt/test-utils/e2e';
 import { publint } from 'publint';
 import { formatMessage } from 'publint/utils';
@@ -27,7 +27,9 @@ import {
   typeErrors,
   workDirectory,
 } from './harness.js';
+import { pathExists } from '../utils/fs.js';
 
+const { join } = path;
 const work = workDirectory();
 const moduleDir = join(work, 'module');
 const appDir = join(work, 'app');
@@ -41,17 +43,17 @@ const installed = (...path: string[]) =>
 
 // The module is built, packed and installed before Nuxt builds the app, and removed after it stops.
 beforeAll(async () => {
-  rmSync(work, { recursive: true, force: true });
-  copyFixture('module', moduleDir);
+  await rm(work, { recursive: true, force: true });
+  await copyFixture('module', moduleDir);
   await buildModule(moduleDir);
   tarball = await packModule(moduleDir, tarballDir);
-  copyFixture('app', appDir);
+  await copyFixture('app', appDir);
   await installModule(tarball, appDir);
   await buildApp(appDir);
 }, 600_000);
-afterAll(() => {
+afterAll(async () => {
   if (!process.env.KEEP_CONTRACT_WORKDIR)
-    rmSync(work, { recursive: true, force: true });
+    await rm(work, { recursive: true, force: true });
 });
 
 await setup({
@@ -82,9 +84,9 @@ describe('the built package', () => {
     expect(output).toContain('"hello-timing/server"');
   }, 120_000);
 
-  it('describes itself in module.json', () => {
+  it('describes itself in module.json', async () => {
     expect(
-      JSON.parse(readFileSync(installed('dist/module.json'), 'utf8')),
+      JSON.parse(await readFile(installed('dist/module.json'), 'utf8')),
     ).toMatchObject({
       name: 'hello-timing',
       configKey: 'helloTiming',
@@ -93,8 +95,12 @@ describe('the built package', () => {
     });
   });
 
-  it('ships the runtime file by file, as Nuxt compiles it', () => {
-    const vue = readFileSync(
+  it('ships the runtime file by file, as Nuxt compiles it', async () => {
+    const hello = await readFile(
+      installed('dist/runtime/assets/hello.css'),
+      'utf8',
+    );
+    const vue = await readFile(
       installed('dist/runtime/components/HelloBanner.vue'),
       'utf8',
     );
@@ -102,11 +108,11 @@ describe('the built package', () => {
       vue.includes('lang="ts"'),
       vue.includes('lang="scss"'),
       vue.includes('#123456'),
-      existsSync(installed('dist/runtime/components/HelloBanner.vue.d.ts')),
-      existsSync(installed('dist/runtime/assets/_vars.css')),
-      readFileSync(installed('dist/runtime/assets/hello.css'), 'utf8').includes(
-        '#654321',
+      await pathExists(
+        installed('dist/runtime/components/HelloBanner.vue.d.ts'),
       ),
+      await pathExists(installed('dist/runtime/assets/_vars.css')),
+      hello.includes('#654321'),
     ]).toEqual([false, false, true, true, false, true]);
   });
 });
@@ -130,7 +136,7 @@ describe('the module in a Nuxt app', () => {
     const greetings = /data-test="greetings">([^<]*)</
       .exec(html)?.[1]
       ?.split('|');
-    expect(greetings?.sort()).toEqual([
+    expect(greetings?.toSorted()).toEqual([
       'Hello, setup!',
       'from the app hook',
       'from the module hook',
@@ -150,9 +156,10 @@ describe('the module in a Nuxt app', () => {
     const hrefs = [
       ...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g),
     ].map((m) => m[1]);
-    const linked = (
-      await Promise.all(hrefs.map((href) => $fetch<string>(href ?? '')))
-    ).join('\n');
+    const pages = await Promise.all(
+      hrefs.map((href) => $fetch<string>(href ?? '')),
+    );
+    const linked = pages.join('\n');
     // The global stylesheet is a file of the module; the component's scoped style is inlined into the page.
     expect(linked).toContain('.hello-global{border-top:1px solid #654321}');
     expect(html).toContain('{color:#123456}');
@@ -210,7 +217,7 @@ describe('the module in a Nuxt app', () => {
 
 describe("the module's types in an app", () => {
   it('type-check a consumer against the generated types, and reject what they forbid', async () => {
-    copyFixture('app', typesDir);
+    await copyFixture('app', typesDir);
     await installModule(tarball, typesDir);
     await prepareApp(typesDir);
     expect(typeErrors(typesDir, 'app/consumer.ts')).toEqual([]);
