@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { relative, resolve, sep } from 'node:path';
+import path from 'node:path';
 import type { UserConfig } from 'vite';
 
 import {
@@ -131,7 +131,8 @@ export function resolveOptions(
       'nuxtModule: extension .js writes ESM, which Node loads as CommonJS outside a "type": "module" package; use .mjs',
     );
   const moduleFile = options.module ?? NUXT_MODULE_ENTRY;
-  if (!existsSync(resolve(root, moduleFile)))
+  // eslint-disable-next-line n/no-sync -- resolveOptions is synchronous and tested as such; an async existence check would ripple into it
+  if (!existsSync(path.resolve(root, moduleFile)))
     throw new Error(
       `nuxtModule: no module to build: ${moduleFile} does not exist; set \`module\``,
     );
@@ -146,11 +147,11 @@ export function resolveOptions(
   // The runtime is built file by file: an entry inside it would be bundled, then replaced by its per-file build.
   const inRuntime = Object.values(entry).filter(
     (file) =>
-      runtimeDir && file.startsWith(`${runtimeDir.split(sep).join('/')}/`),
+      runtimeDir && file.startsWith(`${runtimeDir.split(path.sep).join('/')}/`),
   );
   if (inRuntime.length > 0)
     throw new Error(
-      `nuxtModule: ${inRuntime.map((f) => relative(root, f)).join(', ')} lie in the runtime directory, which is built file by file; remove them from \`entry\``,
+      `nuxtModule: ${inRuntime.map((f) => path.relative(root, f)).join(', ')} lie in the runtime directory, which is built file by file; remove them from \`entry\``,
     );
   const dts = options.dts === false ? undefined : (options.dts ?? {});
   return {

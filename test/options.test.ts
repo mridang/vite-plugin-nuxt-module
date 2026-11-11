@@ -6,19 +6,27 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import nodePath from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
 import { matchesAny } from '../src/externals.js';
 import { resolveOptions } from '../src/options.js';
 
+const DEFAULT_FILES: Record<string, string> = { 'src/module.ts': '' };
+const DEFAULT_PACKAGE: Record<string, unknown> = {
+  name: 'mod',
+  type: 'module',
+};
+
 /** A module package: `src/module.ts` and an empty `src/runtime` unless `files` says otherwise. */
 function packageRoot(
-  files: Record<string, string> = { 'src/module.ts': '' },
-  pkg: Record<string, unknown> = { name: 'mod', type: 'module' },
+  files: Record<string, string> = DEFAULT_FILES,
+  pkg: Record<string, unknown> = DEFAULT_PACKAGE,
 ): string {
+  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
   const root = realpathSync(
-    mkdtempSync(join(tmpdir(), 'nuxt-module-options-')),
+    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+    mkdtempSync(nodePath.join(tmpdir(), 'nuxt-module-options-')),
   );
   const all = {
     'package.json': JSON.stringify(pkg),
@@ -26,11 +34,14 @@ function packageRoot(
     ...files,
   };
   for (const [path, content] of Object.entries(all)) {
-    mkdirSync(dirname(join(root, path)), { recursive: true });
-    writeFileSync(join(root, path), content);
+    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+    mkdirSync(nodePath.dirname(nodePath.join(root, path)), { recursive: true });
+    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+    writeFileSync(nodePath.join(root, path), content);
   }
   if ('src/module.ts' in files)
-    mkdirSync(join(root, 'src/runtime'), { recursive: true });
+    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+    mkdirSync(nodePath.join(root, 'src/runtime'), { recursive: true });
   return root;
 }
 
@@ -39,8 +50,8 @@ describe('resolveOptions', () => {
     const root = packageRoot();
     const o = resolveOptions({}, root);
     expect([o.entry, o.runtimeDir, o.extension, o.dts, o.sourcemap]).toEqual([
-      { module: join(root, 'src/module.ts') },
-      join(root, 'src/runtime'),
+      { module: nodePath.join(root, 'src/module.ts') },
+      nodePath.join(root, 'src/runtime'),
       '.mjs',
       true,
       false,
@@ -52,8 +63,8 @@ describe('resolveOptions', () => {
     expect(
       resolveOptions({ entry: { server: 'src/server.ts' } }, root).entry,
     ).toEqual({
-      module: join(root, 'src/module.ts'),
-      server: join(root, 'src/server.ts'),
+      module: nodePath.join(root, 'src/module.ts'),
+      server: nodePath.join(root, 'src/server.ts'),
     });
   });
 
@@ -62,15 +73,15 @@ describe('resolveOptions', () => {
     expect(
       resolveOptions({ entry: ['src/utils/headers.ts'] }, root).entry,
     ).toEqual({
-      module: join(root, 'src/module.ts'),
-      headers: join(root, 'src/utils/headers.ts'),
+      module: nodePath.join(root, 'src/module.ts'),
+      headers: nodePath.join(root, 'src/utils/headers.ts'),
     });
   });
 
   it('builds a module file that is not src/module.ts', () => {
     const root = packageRoot({ 'src/nuxt.ts': '' });
     expect(resolveOptions({ module: 'src/nuxt.ts' }, root).entry).toEqual({
-      module: join(root, 'src/nuxt.ts'),
+      module: nodePath.join(root, 'src/nuxt.ts'),
     });
   });
 
@@ -125,7 +136,8 @@ describe('resolveOptions', () => {
 
   it('has no runtime when the default directory does not exist', () => {
     const root = packageRoot();
-    rmSync(join(root, 'src/runtime'), { recursive: true });
+    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+    rmSync(nodePath.join(root, 'src/runtime'), { recursive: true });
     expect(resolveOptions({}, root).runtimeDir).toBeUndefined();
   });
 

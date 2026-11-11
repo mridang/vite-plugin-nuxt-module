@@ -1,5 +1,10 @@
-import { relative, resolve } from 'node:path';
-import type * as TypeScript from 'typescript';
+import path from 'node:path';
+import type {
+  CompilerOptions,
+  Diagnostic,
+  FormatDiagnosticsHost,
+  ParsedCommandLine,
+} from 'typescript';
 
 import {
   CONSUMER_COMPILER_OPTIONS,
@@ -15,9 +20,9 @@ import { parsedTsconfig, type TS } from '../tsconfig.js';
 function errors(
   ts: TS,
   root: string,
-  diagnostics: readonly TypeScript.Diagnostic[],
+  diagnostics: readonly Diagnostic[],
 ): string[] {
-  const host: TypeScript.FormatDiagnosticsHost = {
+  const host: FormatDiagnosticsHost = {
     getCanonicalFileName: (file) => file,
     getCurrentDirectory: () => root,
     getNewLine: () => '\n',
@@ -38,10 +43,10 @@ function checkedProject(
   ts: TS,
   tsconfig: string,
   overrides: CompilerOverrides = {},
-): TypeScript.ParsedCommandLine {
+): ParsedCommandLine {
   return parsedTsconfig(ts, tsconfig, {
     ...CONSUMER_COMPILER_OPTIONS,
-    ...(overrides as TypeScript.CompilerOptions),
+    ...(overrides as CompilerOptions),
     noEmit: true,
     composite: false,
     incremental: false,
@@ -54,8 +59,13 @@ export function isSourceTest(
   sourceRoot: string,
   file: string,
 ): boolean {
-  const path = posixPath(relative(resolve(root, sourceRoot), file));
-  return !path.startsWith('..') && matchesAnyGlob(path, TEST_FILE_GLOBS);
+  const relativePath = posixPath(
+    path.relative(path.resolve(root, sourceRoot), file),
+  );
+  return (
+    !relativePath.startsWith('..') &&
+    matchesAnyGlob(relativePath, TEST_FILE_GLOBS)
+  );
 }
 
 /** Options of {@link sourceTypeErrors}. */
@@ -113,16 +123,17 @@ export function declarationTypeErrors(
   if (files.length === 0) return [];
   const ts = packageTypeScript(root);
   const { options } = checkedProject(ts, tsconfig, overrides);
-  const program = ts.createProgram(files, {
-    ...options,
-    skipLibCheck: false,
-    rootDir: undefined,
-    declarationDir: undefined,
-    outDir: undefined,
-  });
+  const emitOptions: CompilerOptions = { ...options, skipLibCheck: false };
+  delete emitOptions.rootDir;
+  delete emitOptions.declarationDir;
+  delete emitOptions.outDir;
+  const program = ts.createProgram(files, emitOptions);
   const own = program
     .getSourceFiles()
-    .filter((sf) => !relative(resolve(outDir), sf.fileName).startsWith('..'));
+    .filter(
+      (sf) =>
+        !path.relative(path.resolve(outDir), sf.fileName).startsWith('..'),
+    );
   return errors(
     ts,
     root,

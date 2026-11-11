@@ -1,8 +1,10 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { parseAst } from 'vite';
+import path from 'node:path';
+import { parseSync } from 'vite';
 
 import { namesFile } from './package-json.js';
+
+const { join } = path;
 
 /** An identifier or string literal naming an export. */
 interface ExportName {
@@ -34,21 +36,19 @@ function scanExports(declaration: string): {
   names: Set<string>;
   reexports: Reexport[];
 } {
-  const ast = parseAst(declaration, { lang: 'ts' }) as unknown as {
-    body: readonly Statement[];
-  };
+  // eslint-disable-next-line n/no-sync -- parseSync is the synchronous parser vite's deprecation notice names; the scan runs sync
+  const { program } = parseSync('module.ts', declaration, { lang: 'ts' });
+  const statements: unknown = program.body;
   const names = new Set<string>();
   const reexports: Reexport[] = [];
-  for (const node of ast.body) {
+  for (const node of statements as readonly Statement[]) {
     if (node.type === 'ExportNamedDeclaration') {
-      if (node.declaration) {
-        const id =
-          node.declaration.id?.name ??
-          node.declaration.declarations?.[0]?.id?.name;
-        if (id) {
-          names.add(id);
-          reexports.push({ names: [id], star: false });
-        }
+      const id =
+        node.declaration?.id?.name ??
+        node.declaration?.declarations?.[0]?.id?.name;
+      if (id) {
+        names.add(id);
+        reexports.push({ names: [id], star: false });
       }
       for (const s of node.specifiers ?? []) {
         const exported = s.exported.name ?? s.exported.value ?? '';
@@ -64,6 +64,8 @@ function scanExports(declaration: string): {
       reexports.push({ names: ['default'], star: false });
     } else if (node.type === 'ExportAllDeclaration' && node.source) {
       reexports.push({ names: [], star: true, specifier: node.source.value });
+    } else {
+      // Other statements add no export name for the scan to record.
     }
   }
   return { names, reexports };
@@ -156,10 +158,13 @@ export function writeTypesEntry(
   const mjs = extension === '.mjs';
   // Paired with the module's own declaration extension: `module.mjs` → `types.d.mts`, `module.js` → `types.d.ts`.
   const file = join(outDir, mjs ? 'types.d.mts' : 'types.d.ts');
+  // eslint-disable-next-line n/no-sync -- writeTypesEntry is synchronous: outputs.ts calls it from its sync declaration step
   if (existsSync(file) || !namesFile(root, file)) return;
+  // eslint-disable-next-line n/no-sync -- writeTypesEntry is synchronous: outputs.ts calls it from its sync declaration step
   const declaration = readFileSync(
     join(outDir, mjs ? 'module.d.mts' : 'module.d.ts'),
     'utf8',
   );
+  // eslint-disable-next-line n/no-sync -- writeTypesEntry is synchronous: outputs.ts calls it from its sync declaration step
   writeFileSync(file, typesEntry(declaration, `./module${extension}`));
 }

@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import nodePath from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
 import { fixture } from './utils/fixture.js';
@@ -10,6 +10,8 @@ import {
   packageTsconfig,
   parsedTsconfig,
 } from '../src/tsconfig.js';
+
+const { join } = nodePath;
 
 describe('parsedTsconfig', () => {
   it('applies the extends chain, with overrides on top', () => {
@@ -74,11 +76,15 @@ describe('absolutePaths', () => {
 
 describe('packageTsconfig', () => {
   const tree = (files: Record<string, string>): string => {
+    // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
     const dir = realpathSync(
+      // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
       mkdtempSync(join(tmpdir(), 'nuxt-module-tsconfig-')),
     );
     for (const [name, text] of Object.entries(files)) {
+      // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
       mkdirSync(join(dir, name, '..'), { recursive: true });
+      // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
       writeFileSync(join(dir, name), text);
     }
     return dir;

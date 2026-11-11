@@ -1,4 +1,4 @@
-import { resolve } from 'node:path';
+import path from 'node:path';
 
 /** Entry files, listed (each named after its file) or as an `{ outputName: file }` map (names may contain `/`). */
 export type EntryOption = readonly string[] | Readonly<Record<string, string>>;
@@ -18,10 +18,9 @@ export function namedEntries(entry: EntryOption): Record<string, string> {
   const named: Record<string, string> = {};
   for (const file of entry) {
     const name = entryName(file);
-    const taken = named[name];
-    if (taken !== undefined)
+    if (Object.hasOwn(named, name))
       throw new Error(
-        `entry: ${taken} and ${file} are both named "${name}"; name them with the { name: file } form`,
+        `entry: ${named[name]} and ${file} are both named "${name}"; name them with the { name: file } form`,
       );
     named[name] = file;
   }
@@ -44,7 +43,7 @@ export function resolvedEntries(
   return Object.fromEntries(
     Object.entries(entries).map(([name, file]) => [
       name,
-      posixPath(resolve(root, file)),
+      posixPath(path.resolve(root, file)),
     ]),
   );
 }

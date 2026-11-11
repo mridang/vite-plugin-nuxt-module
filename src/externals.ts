@@ -35,7 +35,7 @@ export function declaredDependencies(root: string): readonly string[] {
  */
 const BUILTIN_MATCHERS: readonly Matcher[] = [
   /^node:/,
-  ...builtinModules.map(packageMatcher),
+  ...builtinModules.map((name) => packageMatcher(name)),
 ];
 
 /** What decides the module build's externals. */
@@ -61,7 +61,7 @@ export function moduleExternals(
   return [
     ...declaredDependencies(root)
       .filter((d) => !inlined(d))
-      .map(packageMatcher),
+      .map((name) => packageMatcher(name)),
     ...(pkg.name && !inlined(pkg.name) ? [packageMatcher(pkg.name)] : []),
     ...external,
     ...BUILTIN_MATCHERS,

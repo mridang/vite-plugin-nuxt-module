@@ -6,7 +6,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join } from 'node:path';
+import nodePath from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 import { createLogger, type Logger } from 'vite';
 import { describe, expect, it } from '@jest/globals';
@@ -94,8 +94,10 @@ function pnpmStarterModule(): string {
     [`${schema}/index.d.ts`]: starterModule[`${schemaInKit}/index.d.ts`],
   });
   const link = (target: string, path: string) => {
-    mkdirSync(dirname(join(root, path)), { recursive: true });
-    symlinkSync(join(root, target), join(root, path), 'dir');
+    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+    mkdirSync(nodePath.dirname(nodePath.join(root, path)), { recursive: true });
+    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+    symlinkSync(nodePath.join(root, target), nodePath.join(root, path), 'dir');
   };
   link(kit, 'node_modules/@nuxt/kit');
   link(schema, 'node_modules/@nuxt/schema');
@@ -119,14 +121,19 @@ async function until(done: () => boolean, ms = 45_000): Promise<void> {
 /** A silent logger that keeps the errors logged to it. */
 function errorLogger(errors: string[]): Logger {
   const logger = createLogger('silent');
-  return { ...logger, error: (message) => void errors.push(message) };
+  return {
+    ...logger,
+    error: (message) => {
+      errors.push(message);
+    },
+  };
 }
 
 describe('hoistedTypePaths', () => {
   it('maps @nuxt/schema to the copy @nuxt/kit has when the module cannot resolve it', () => {
     const root = tree(starterModule);
     expect(hoistedTypePaths(root)['@nuxt/schema']).toEqual([
-      join(root, schemaInKit),
+      nodePath.join(root, schemaInKit),
     ]);
   });
 
@@ -138,7 +145,7 @@ describe('hoistedTypePaths', () => {
       }),
     });
     expect(hoistedTypePaths(root)['@nuxt/schema']).toEqual([
-      join(root, 'node_modules/@nuxt/schema'),
+      nodePath.join(root, 'node_modules/@nuxt/schema'),
     ]);
   });
 
@@ -152,7 +159,7 @@ describe('hoistedTypePaths', () => {
       'node_modules/nuxt/package.json': '{}',
     });
     expect(hoistedTypePaths(root)['#app/nuxt']).toEqual([
-      join(root, 'node_modules/nuxt/dist/app/nuxt'),
+      nodePath.join(root, 'node_modules/nuxt/dist/app/nuxt'),
     ]);
   });
 });
@@ -167,14 +174,16 @@ describe('moduleDeclarationOptions', () => {
       }),
     });
     expect(
-      moduleDeclarationOptions(root, join(root, 'tsconfig.json')).types,
+      moduleDeclarationOptions(root, nodePath.join(root, 'tsconfig.json'))
+        .types,
     ).toEqual(['node', '@nuxt/schema']);
   });
 
   it('adds no types the module cannot resolve', () => {
     const root = tree(starterModule);
     expect(
-      moduleDeclarationOptions(root, join(root, 'tsconfig.json')).types,
+      moduleDeclarationOptions(root, nodePath.join(root, 'tsconfig.json'))
+        .types,
     ).toBeUndefined();
   });
 
@@ -186,10 +195,9 @@ describe('moduleDeclarationOptions', () => {
       }),
     });
     expect(
-      moduleDeclarationOptions(root, join(root, 'tsconfig.json')).paths?.[
-        '~/*'
-      ],
-    ).toEqual([join(root, 'src/*')]);
+      moduleDeclarationOptions(root, nodePath.join(root, 'tsconfig.json'))
+        .paths?.['~/*'],
+    ).toEqual([nodePath.join(root, 'src/*')]);
   });
 });
 
@@ -202,12 +210,19 @@ describe('sharedChunkFileNames', () => {
 describe('writeCompatibleDeclarations', () => {
   it("copies each entry's .d.mts to a .d.ts", () => {
     const root = withTools({ name: 'mod' }, {});
-    mkdirSync(join(root, 'dist'));
-    writeFileSync(join(root, 'dist/module.d.mts'), 'export {};');
-    writeCompatibleDeclarations(join(root, 'dist'), ['module', 'missing']);
+    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+    mkdirSync(nodePath.join(root, 'dist'));
+    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+    writeFileSync(nodePath.join(root, 'dist/module.d.mts'), 'export {};');
+    writeCompatibleDeclarations(nodePath.join(root, 'dist'), [
+      'module',
+      'missing',
+    ]);
     expect([
-      readFileSync(join(root, 'dist/module.d.ts'), 'utf8'),
-      existsSync(join(root, 'dist/missing.d.ts')),
+      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+      readFileSync(nodePath.join(root, 'dist/module.d.ts'), 'utf8'),
+      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+      existsSync(nodePath.join(root, 'dist/missing.d.ts')),
     ]).toEqual(['export {};', false]);
   });
 });
@@ -215,21 +230,24 @@ describe('writeCompatibleDeclarations', () => {
 describe('nuxtModuleOutputs', () => {
   it('writes nothing after a failed build', async () => {
     const root = withTools({ name: 'mod' }, {});
+    let runtimeDir: string | undefined;
+    let target: string | undefined;
+    let moduleMeta: Readonly<Record<string, unknown>> | undefined;
     const plugin = nuxtModuleOutputs(() => ({
       root,
       sourceRoot: 'src',
-      entry: { module: join(root, 'src/module.ts') },
-      runtimeDir: undefined,
+      entry: { module: nodePath.join(root, 'src/module.ts') },
+      runtimeDir,
       runtimeExclude: [],
       external: [],
       bundle: [],
       extension: '.mjs',
-      target: undefined,
+      target,
       dts: true,
       compatible: false,
       eager: false,
-      tsconfig: join(root, 'tsconfig.json'),
-      moduleMeta: undefined,
+      tsconfig: nodePath.join(root, 'tsconfig.json'),
+      moduleMeta,
       prepare: false,
       sourcemap: false,
       allowWarnings: [],
@@ -241,15 +259,17 @@ describe('nuxtModuleOutputs', () => {
     });
     (plugin.buildEnd as unknown as (e: Error) => void)(new Error('x'));
     await (plugin.closeBundle as unknown as () => Promise<void>)();
-    expect(existsSync(join(root, 'dist/module.json'))).toBe(false);
+    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+    expect(existsSync(nodePath.join(root, 'dist/module.json'))).toBe(false);
   });
 
   it('declares a module that depends on @nuxt/kit only', async () => {
     const root = tree(starterModule);
     await buildModule(root);
-    expect(readFileSync(join(root, 'dist/module.d.mts'), 'utf8')).toContain(
-      'import("@nuxt/schema").NuxtModule',
-    );
+    expect(
+      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+      readFileSync(nodePath.join(root, 'dist/module.d.mts'), 'utf8'),
+    ).toContain('import("@nuxt/schema").NuxtModule');
   }, 60_000);
 
   it('declares a module that depends on @nuxt/kit only when its tsconfig sets declaration', async () => {
@@ -262,40 +282,47 @@ describe('nuxtModuleOutputs', () => {
       }),
     });
     await buildModule(root);
-    expect(readFileSync(join(root, 'dist/module.d.mts'), 'utf8')).toContain(
-      'import("@nuxt/schema").NuxtModule',
-    );
+    expect(
+      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+      readFileSync(nodePath.join(root, 'dist/module.d.mts'), 'utf8'),
+    ).toContain('import("@nuxt/schema").NuxtModule');
   }, 60_000);
 
   it('declares a module whose @nuxt/schema is linked in by pnpm', async () => {
     const root = pnpmStarterModule();
     await buildModule(root);
-    expect(readFileSync(join(root, 'dist/module.d.mts'), 'utf8')).toContain(
-      'import("@nuxt/schema").NuxtModule',
-    );
+    expect(
+      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+      readFileSync(nodePath.join(root, 'dist/module.d.mts'), 'utf8'),
+    ).toContain('import("@nuxt/schema").NuxtModule');
   }, 60_000);
 
   it('reports a type error under --watch and rebuilds once it is fixed', async () => {
     const root = tree(starterModule);
     const errors: string[] = [];
-    const module = join(root, 'src/module.ts');
-    const declaration = join(root, 'dist/module.d.mts');
+    const module = nodePath.join(root, 'src/module.ts');
+    const declaration = nodePath.join(root, 'dist/module.d.mts');
     const watcher = await watchFixture(
       root,
       { runtimeDir: false },
       { customLogger: errorLogger(errors) },
     );
     try {
+      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
       await until(() => existsSync(declaration));
+      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
       appendFileSync(module, 'export const broken: number = "nan";\n');
       await until(() => errors.length > 0);
+      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
       writeFileSync(
         module,
         `${starterModule['src/module.ts']}export const fixed = 1;\n`,
       );
       await until(
         () =>
+          // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
           existsSync(declaration) &&
+          // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
           readFileSync(declaration, 'utf8').includes('fixed'),
       );
     } finally {
@@ -308,8 +335,10 @@ describe('nuxtModuleOutputs', () => {
     const root = tree(starterModule);
     await buildModule(root);
     expect([
-      existsSync(join(root, 'dist/module.mjs.map')),
-      existsSync(join(root, 'dist/module.d.mts.map')),
+      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+      existsSync(nodePath.join(root, 'dist/module.mjs.map')),
+      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+      existsSync(nodePath.join(root, 'dist/module.d.mts.map')),
     ]).toEqual([false, false]);
   }, 60_000);
 
@@ -332,8 +361,12 @@ describe('nuxtModuleOutputs', () => {
       });
       await buildModule(root);
       expect([
-        JSON.parse(readFileSync(join(root, 'dist/module.json'), 'utf8')).name,
-        existsSync(join(root, 'dist/types.d.mts')),
+        JSON.parse(
+          // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+          readFileSync(nodePath.join(root, 'dist/module.json'), 'utf8'),
+        ).name,
+        // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+        existsSync(nodePath.join(root, 'dist/types.d.mts')),
       ]).toEqual(['starter', typesEntry]);
     },
     60_000,

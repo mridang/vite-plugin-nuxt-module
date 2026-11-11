@@ -1,8 +1,10 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, resolve } from 'node:path';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type * as TypeScript from 'typescript';
+import type TypeScript from 'typescript';
+
+const { dirname, join, resolve } = path;
 
 /** A `require` that resolves like code inside the package at `root`. */
 export function requireFrom(root: string): ReturnType<typeof createRequire> {
@@ -68,11 +70,15 @@ export function exportsTarget(
   if (subpath in map) return exportTarget(map[subpath], conditions);
   const patterns = Object.keys(map)
     .filter((key) => key.includes('*'))
-    .sort((a, b) => b.indexOf('*') - a.indexOf('*'));
+    .toSorted((a, b) => b.indexOf('*') - a.indexOf('*'));
   for (const key of patterns) {
     const [prefix = '', suffix = ''] = key.split('*');
-    if (!subpath.startsWith(prefix) || !subpath.endsWith(suffix)) continue;
-    if (subpath.length < prefix.length + suffix.length) continue;
+    if (
+      !subpath.startsWith(prefix) ||
+      !subpath.endsWith(suffix) ||
+      subpath.length < prefix.length + suffix.length
+    )
+      continue;
     const match = subpath.slice(prefix.length, subpath.length - suffix.length);
     return exportTarget(map[key], conditions)?.replaceAll('*', match);
   }
@@ -90,6 +96,7 @@ export function packageDirectory(
 ): string | undefined {
   for (let dir = resolve(root); ; dir = dirname(dir)) {
     const candidate = join(dir, 'node_modules', name);
+    // eslint-disable-next-line n/no-sync -- synchronous resolution: config and declaration steps need the path at once, so async would change exported signatures
     if (existsSync(join(candidate, 'package.json'))) return candidate;
     if (dirname(dir) === dir) return undefined;
   }
@@ -104,6 +111,7 @@ export function realPackageDirectory(
   root: string,
 ): string | undefined {
   const dir = packageDirectory(name, root);
+  // eslint-disable-next-line n/no-sync -- synchronous resolution: config and declaration steps need the path at once, so async would change exported signatures
   return dir === undefined ? undefined : realpathSync(dir);
 }
 
@@ -118,6 +126,7 @@ function resolvePackageFile(specifier: string, root: string): string {
   if (dir === undefined)
     throw new Error(`cannot find package ${name} from ${root}`);
   if (subpath === './package.json') return join(dir, 'package.json');
+  // eslint-disable-next-line n/no-sync -- synchronous resolution: config and declaration steps need the path at once, so async would change exported signatures
   const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
     exports?: unknown;
   };

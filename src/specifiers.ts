@@ -1,15 +1,9 @@
 import { existsSync, statSync } from 'node:fs';
-import {
-  basename,
-  dirname,
-  extname,
-  join,
-  posix,
-  relative,
-  resolve,
-  sep,
-} from 'node:path';
-import { parseAst } from 'vite';
+import path from 'node:path';
+import { parseSync } from 'vite';
+
+const { basename, dirname, extname, join, posix, relative, resolve, sep } =
+  path;
 
 /** A declaration file name. */
 export const DECLARATION_RE = /\.d\.[cm]?ts$/;
@@ -58,6 +52,7 @@ export interface SpecifierScope {
   readonly entries: Readonly<Record<string, string>>;
 }
 
+// eslint-disable-next-line n/no-sync -- sourceFileOf and rewriteSpecifier are synchronous build helpers; async would change their exported signatures
 const isFile = (p: string): boolean => existsSync(p) && statSync(p).isFile();
 
 /** TypeScript extensions a `.js` specifier can stand for (TS NodeNext style: `./x.js` for `x.ts`). */
@@ -72,13 +67,15 @@ export function sourceFileOf(target: string): string | undefined {
   if (isFile(target)) return target;
   if (/\.[cm]?js$/.test(target)) {
     const found = TS_EXTS.map((ts) => target.replace(/\.[cm]?js$/, ts)).find(
-      isFile,
+      (file) => isFile(file),
     );
     if (found) return found;
   }
   return (
-    SOURCE_EXTS.map((e) => target + e).find(isFile) ??
-    SOURCE_EXTS.map((e) => join(target, `index${e}`)).find(isFile)
+    SOURCE_EXTS.map((e) => target + e).find((file) => isFile(file)) ??
+    SOURCE_EXTS.map((e) => join(target, `index${e}`)).find((file) =>
+      isFile(file),
+    )
   );
 }
 
@@ -95,7 +92,8 @@ export function rewriteSpecifier(
   scope?: SpecifierScope,
 ): string {
   if (!/^\.\.?(\/|$)/.test(spec)) return spec;
-  const suffix = /[?#].*$/.exec(spec)?.[0] ?? '';
+  const queryAt = spec.search(/[?#]/);
+  const suffix = queryAt < 0 ? '' : spec.slice(queryAt);
   const bare = suffix ? spec.slice(0, -suffix.length) : spec;
   const target = resolve(dirname(fromFile), bare);
   const specifierOf = (rel: string): string =>
@@ -119,11 +117,11 @@ export function rewriteSpecifier(
   const explicit = extname(bare);
   if (explicit && isFile(target)) {
     // A Sass import names the stylesheet the runtime build compiles it to (`./theme.scss` → `./theme.css`).
-    return (/\.(?:ts|tsx|jsx|mts|cts)$/.test(explicit) &&
-      !DECLARATION_RE.test(bare)) ||
-      (SASS_RE.test(explicit) && inside(target) && !isSassPartial(target))
-      ? located(target)
-      : spec;
+    const isSourceImport =
+      /\.(?:ts|tsx|jsx|mts|cts)$/.test(explicit) && !DECLARATION_RE.test(bare);
+    const isSassImport =
+      SASS_RE.test(explicit) && inside(target) && !isSassPartial(target);
+    return isSourceImport || isSassImport ? located(target) : spec;
   }
   const source = sourceFileOf(target);
   if (!source) return spec;
@@ -175,7 +173,8 @@ export function specifierEdits(
   lang: 'js' | 'dts',
   map: (specifier: string) => string | undefined,
 ): Edit[] {
-  const ast = parseAst(code, { lang }) as unknown as { body: unknown };
+  // eslint-disable-next-line n/no-sync -- parseSync is the synchronous parser vite's deprecation notice names; the rewrite runs sync
+  const { program } = parseSync('module.ts', code, { lang });
   const edits: Edit[] = [];
   const visit = (value: unknown): void => {
     if (!value || typeof value !== 'object') return;
@@ -205,14 +204,14 @@ export function specifierEdits(
     for (const [key, child] of Object.entries(node))
       if (key !== 'source' || !src) visit(child);
   };
-  visit(ast.body);
+  visit(program.body);
   return edits;
 }
 
 /** `code` with `edits` applied. */
 export function applyEdits(code: string, edits: readonly Edit[]): string {
   return [...edits]
-    .sort((a, b) => b.start - a.start)
+    .toSorted((a, b) => b.start - a.start)
     .reduce((c, e) => c.slice(0, e.start) + e.text + c.slice(e.end), code);
 }
 

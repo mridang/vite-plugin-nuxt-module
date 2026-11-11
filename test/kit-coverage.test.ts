@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import nodePath from 'node:path';
+// eslint-disable-next-line sonarjs/no-wildcard-import -- the test compares every export of @nuxt/kit, so the whole namespace is needed
 import * as kit from '@nuxt/kit';
 import { describe, expect, it } from '@jest/globals';
 
@@ -8,26 +9,32 @@ import { KIT_API } from './contract/kit-api.js';
 
 /** The names the fixture module imports from `@nuxt/kit`. */
 function importedFromKit(): string[] {
-  const source = readFileSync(join(FIXTURES, 'module/src/module.ts'), 'utf8');
+  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+  const source = readFileSync(
+    nodePath.join(FIXTURES, 'module/src/module.ts'),
+    'utf8',
+  );
   const names =
     /import\s*\{([^}]*)\}\s*from\s*["']@nuxt\/kit["']/.exec(source)?.[1] ?? '';
   return names
     .split(',')
     .map((name) => name.trim())
     .filter(Boolean)
-    .sort();
+    .toSorted((a, b) => a.localeCompare(b));
 }
 
 describe('the @nuxt/kit API the contract covers', () => {
   it('decides every export of the installed @nuxt/kit', () => {
-    expect(Object.keys(KIT_API).sort()).toEqual(Object.keys(kit).sort());
+    expect(Object.keys(KIT_API).toSorted((a, b) => a.localeCompare(b))).toEqual(
+      Object.keys(kit).toSorted((a, b) => a.localeCompare(b)),
+    );
   });
 
   it('covers exactly the exports the fixture module imports', () => {
     const covered = Object.entries(KIT_API)
       .filter(([, coverage]) => coverage === 'covered')
       .map(([name]) => name)
-      .sort();
+      .toSorted((a, b) => a.localeCompare(b));
     expect(importedFromKit()).toEqual(covered);
   });
 

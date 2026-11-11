@@ -7,8 +7,9 @@
  * on the package. `test/kit-coverage.test.ts` lists every export of `@nuxt/kit` and requires each to be
  * covered by the fixture or excluded with a reason, so a new kit function forces a decision.
  */
-import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
+import path from 'node:path';
 import { $fetch, fetch, setup } from '@nuxt/test-utils/e2e';
 import { publint } from 'publint';
 import { formatMessage } from 'publint/utils';
@@ -28,6 +29,7 @@ import {
   workDirectory,
 } from './harness.js';
 
+const { join } = path;
 const work = workDirectory();
 const moduleDir = join(work, 'module');
 const appDir = join(work, 'app');
@@ -41,7 +43,7 @@ const installed = (...path: string[]) =>
 
 // The module is built, packed and installed before Nuxt builds the app, and removed after it stops.
 beforeAll(async () => {
-  rmSync(work, { recursive: true, force: true });
+  await rm(work, { recursive: true, force: true });
   copyFixture('module', moduleDir);
   await buildModule(moduleDir);
   tarball = await packModule(moduleDir, tarballDir);
@@ -49,9 +51,9 @@ beforeAll(async () => {
   await installModule(tarball, appDir);
   await buildApp(appDir);
 }, 600_000);
-afterAll(() => {
+afterAll(async () => {
   if (!process.env.KEEP_CONTRACT_WORKDIR)
-    rmSync(work, { recursive: true, force: true });
+    await rm(work, { recursive: true, force: true });
 });
 
 await setup({
@@ -84,6 +86,7 @@ describe('the built package', () => {
 
   it('describes itself in module.json', () => {
     expect(
+      // eslint-disable-next-line n/no-sync -- sync is fine in a script or bootstrap: a test reads the files it just built
       JSON.parse(readFileSync(installed('dist/module.json'), 'utf8')),
     ).toMatchObject({
       name: 'hello-timing',
@@ -94,6 +97,7 @@ describe('the built package', () => {
   });
 
   it('ships the runtime file by file, as Nuxt compiles it', () => {
+    // eslint-disable-next-line n/no-sync -- sync is fine in a script or bootstrap: a test reads the files it just built
     const vue = readFileSync(
       installed('dist/runtime/components/HelloBanner.vue'),
       'utf8',
@@ -102,8 +106,11 @@ describe('the built package', () => {
       vue.includes('lang="ts"'),
       vue.includes('lang="scss"'),
       vue.includes('#123456'),
+      // eslint-disable-next-line n/no-sync -- sync is fine in a script or bootstrap: a test reads the files it just built
       existsSync(installed('dist/runtime/components/HelloBanner.vue.d.ts')),
+      // eslint-disable-next-line n/no-sync -- sync is fine in a script or bootstrap: a test reads the files it just built
       existsSync(installed('dist/runtime/assets/_vars.css')),
+      // eslint-disable-next-line n/no-sync -- sync is fine in a script or bootstrap: a test reads the files it just built
       readFileSync(installed('dist/runtime/assets/hello.css'), 'utf8').includes(
         '#654321',
       ),
@@ -130,7 +137,7 @@ describe('the module in a Nuxt app', () => {
     const greetings = /data-test="greetings">([^<]*)</
       .exec(html)?.[1]
       ?.split('|');
-    expect(greetings?.sort()).toEqual([
+    expect(greetings?.toSorted()).toEqual([
       'Hello, setup!',
       'from the app hook',
       'from the module hook',
@@ -150,9 +157,10 @@ describe('the module in a Nuxt app', () => {
     const hrefs = [
       ...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g),
     ].map((m) => m[1]);
-    const linked = (
-      await Promise.all(hrefs.map((href) => $fetch<string>(href ?? '')))
-    ).join('\n');
+    const pages = await Promise.all(
+      hrefs.map((href) => $fetch<string>(href ?? '')),
+    );
+    const linked = pages.join('\n');
     // The global stylesheet is a file of the module; the component's scoped style is inlined into the page.
     expect(linked).toContain('.hello-global{border-top:1px solid #654321}');
     expect(html).toContain('{color:#123456}');

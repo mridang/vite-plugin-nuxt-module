@@ -6,7 +6,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import nodePath from 'node:path';
 import { afterEach, describe, expect, it } from '@jest/globals';
 
 import {
@@ -19,17 +19,23 @@ import {
   specifierEdits,
 } from '../src/specifiers.js';
 
+const { dirname, join } = nodePath;
+
 const dirs: string[] = [];
 function tree(files: Record<string, string>): string {
+  // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'nuxt-plugin-test-')));
   dirs.push(root);
   for (const [path, content] of Object.entries(files)) {
+    // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
     mkdirSync(dirname(join(root, path)), { recursive: true });
+    // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
     writeFileSync(join(root, path), content);
   }
   return root;
 }
 afterEach(() => {
+  // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 

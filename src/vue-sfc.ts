@@ -1,11 +1,13 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { transformWithOxc } from 'vite';
 
 import { packageSass } from './sass.js';
 import { importFromRoot, realPackageDirectory } from './resolve.js';
 import { SASS_RE } from './specifiers.js';
+
+const { join } = path;
 
 /**
  * Where `vue-sfc-transformer` is looked for after the module itself: the packages `nuxt-module-build`
@@ -145,7 +147,7 @@ export async function transformSfc(
         extension: '.vue',
         path: from,
         srcPath: from,
-        getContents: async () => readFileSync(from, 'utf8'),
+        getContents: async () => readFile(from, 'utf8'),
       },
       { options: { esbuild: {} }, loadFile: sfcSnippetLoader(root) },
     )) ?? [];

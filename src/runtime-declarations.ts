@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
-import type * as TS from 'typescript';
+import { access, mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import type TS from 'typescript';
 
 import { searchForWorkspaceRoot } from 'vite';
 
@@ -18,6 +18,13 @@ import {
 } from './specifiers.js';
 import { effectiveTsconfig } from './nuxt-tsconfig.js';
 
+const { dirname, join, relative, resolve } = path;
+
+const exists = (file: string): Promise<boolean> =>
+  access(file)
+    .then(() => true)
+    .catch(() => false);
+
 /** What the runtime declaration step needs. */
 export interface RuntimeDeclarationsOptions {
   readonly root: string;
@@ -30,7 +37,7 @@ export interface RuntimeDeclarationsOptions {
 /** Where a source file's declaration is written by TypeScript (no `outDir`): next to it. */
 export function declarationFileOf(file: string): string {
   if (file.endsWith('.vue')) return `${file}.d.ts`;
-  return file.replace(/\.(m|c)?[jt]sx?$/, '.d.$1ts');
+  return file.replace(/\.([mc])?[jt]sx?$/, '.d.$1ts');
 }
 
 /**
@@ -54,18 +61,15 @@ export function rewriteRuntimeTypeAliases(code: string): string {
 export function declarationCompilerOptions(
   options: TS.CompilerOptions,
 ): TS.CompilerOptions {
-  /* eslint-disable @typescript-eslint/no-unused-vars -- these options are dropped by leaving them out of `own` */
-  const {
-    outDir: _outDir,
-    declarationDir: _declarationDir,
-    rootDir: _rootDir,
-    outFile: _outFile,
-    composite: _composite,
-    incremental: _incremental,
-    tsBuildInfoFile: _tsBuildInfoFile,
-    ...own
-  } = options;
-  /* eslint-enable @typescript-eslint/no-unused-vars */
+  const own: TS.CompilerOptions = { ...options };
+  // Dropped from `own`: the options that place files on disk, which an in-memory emit must not inherit.
+  delete own.outDir;
+  delete own.declarationDir;
+  delete own.rootDir;
+  delete own.outFile;
+  delete own.composite;
+  delete own.incremental;
+  delete own.tsBuildInfoFile;
   return {
     skipLibCheck: true,
     strictNullChecks: true,
@@ -152,21 +156,21 @@ export async function emitRuntimeDeclarations(
       );
     for (const input of inputs) {
       // A declaration written by hand next to its source (`plain.js` + `plain.d.ts`) is shipped as written.
-      if (existsSync(declarationFileOf(input))) continue;
+      if (await exists(declarationFileOf(input))) continue;
       const rel = relative(o.runtimeDir, declarationFileOf(input));
       const text = written.get(declarationFileOf(input));
       if (text === undefined)
         throw new Error(`nuxtModule: no declaration was emitted for ${input}`);
       const dest = join(out, rel);
-      mkdirSync(dirname(dest), { recursive: true });
+      await mkdir(dirname(dest), { recursive: true });
       const code = rewriteRuntimeTypeAliases(
         rewriteDeclarationImports(text, join(o.runtimeDir, rel), o.scope),
       );
-      writeFileSync(dest, code);
+      await writeFile(dest, code);
       shipped.push([dest, code]);
       // vue-tsc names these `X.vue.d.ts`; newer TS tooling also looks for `X.d.vue.ts`.
       if (rel.endsWith('.vue.d.ts'))
-        writeFileSync(
+        await writeFile(
           join(out, rel.replace(/\.vue\.d\.ts$/, '.d.vue.ts')),
           code,
         );

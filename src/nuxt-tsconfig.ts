@@ -1,5 +1,5 @@
 import { existsSync, statSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import path from 'node:path';
 
 import { NUXT_BUILD_DIR, PROJECT_TSCONFIG } from './defaults.js';
 import { anyTypeScript } from './resolve.js';
@@ -10,6 +10,7 @@ interface TsconfigJson {
   readonly extends?: unknown;
 }
 
+// eslint-disable-next-line n/no-sync -- the tsconfig chain is read synchronously through the TypeScript API, so its file checks stay sync
 const isFile = (p: string): boolean => existsSync(p) && statSync(p).isFile();
 
 /**
@@ -27,19 +28,20 @@ export function missingTsconfigFile(ts: TS, file: string): string | undefined {
     );
   const json = (config ?? {}) as TsconfigJson;
   for (const ref of json.references ?? []) {
-    const p = resolve(dirname(file), ref.path);
+    const p = path.resolve(path.dirname(file), ref.path);
     if (
       !isFile(p) &&
       !isFile(`${p}.json`) &&
-      !isFile(join(p, PROJECT_TSCONFIG))
+      !isFile(path.join(p, PROJECT_TSCONFIG))
     )
       return p;
   }
   const ext = json.extends;
-  for (const e of Array.isArray(ext) ? ext : ext ? [ext] : []) {
-    if (typeof e !== 'string' || !(e.startsWith('.') || isAbsolute(e)))
+  const extended: unknown[] = Array.isArray(ext) ? ext : [ext];
+  for (const e of extended) {
+    if (typeof e !== 'string' || !(e.startsWith('.') || path.isAbsolute(e)))
       continue;
-    const p = resolve(dirname(file), e);
+    const p = path.resolve(path.dirname(file), e);
     const target = isFile(p) || p.endsWith('.json') ? p : `${p}.json`;
     const missing = missingTsconfigFile(ts, target);
     if (missing) return missing;
@@ -53,9 +55,9 @@ function brokenTsconfigMessage(
   tsconfig: string,
   missing: string,
 ): string {
-  const generated = missing.split(sep).includes(NUXT_BUILD_DIR);
+  const generated = missing.split(path.sep).includes(NUXT_BUILD_DIR);
   return [
-    `nuxtModule: ${relative(root, tsconfig) || tsconfig} needs ${relative(root, missing) || missing}, which does not exist.`,
+    `nuxtModule: ${path.relative(root, tsconfig) || tsconfig} needs ${path.relative(root, missing) || missing}, which does not exist.`,
     generated
       ? 'It is written by `nuxi prepare`: run that before the build, or set `prepare: true` to have the build run it.'
       : 'Create it, or point `tsconfig` at a tsconfig whose chain is complete.',
@@ -89,6 +91,7 @@ export function optionalTsconfig(
   required: boolean,
 ): string | undefined {
   const base = packageTsconfig(root, tsconfig);
+  // eslint-disable-next-line n/no-sync -- optionalTsconfig is synchronous and tested as such; async would ripple into its callers
   if (!required && (!base || !existsSync(base))) return undefined;
   return effectiveTsconfig(root, tsconfig);
 }

@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import path from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
 import { FIXTURE_TSCONFIG, fixture } from '../utils/fixture.js';
@@ -8,6 +8,8 @@ import {
   isSourceTest,
   sourceTypeErrors,
 } from '../../src/declarations/check.js';
+
+const { join } = path;
 
 /** The compiler options of {@link FIXTURE_TSCONFIG}. */
 const fixtureOptions = JSON.parse(FIXTURE_TSCONFIG).compilerOptions as Record<
@@ -126,7 +128,9 @@ describe('declarationTypeErrors', () => {
       },
       { link: ['typescript'] },
     );
+    // eslint-disable-next-line n/no-sync -- sync is fine in a script or bootstrap: a test writes its fixture
     mkdirSync(join(root, 'src'), { recursive: true });
+    // eslint-disable-next-line n/no-sync -- sync is fine in a script or bootstrap: a test writes its fixture
     writeFileSync(join(root, 'src/index.ts'), 'export {};\n');
     expect(
       declarationTypeErrors(

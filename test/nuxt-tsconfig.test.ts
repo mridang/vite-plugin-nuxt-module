@@ -1,5 +1,5 @@
-import { join } from 'node:path';
-import * as ts from 'typescript';
+import nodePath from 'node:path';
+import ts from 'typescript';
 import { describe, expect, it } from '@jest/globals';
 
 import { fixture } from './utils/fixture.js';
@@ -20,7 +20,7 @@ describe('missingTsconfigFile', () => {
       'base.json': '{}',
     });
     expect(
-      missingTsconfigFile(ts, join(root, 'tsconfig.json')),
+      missingTsconfigFile(ts, nodePath.join(root, 'tsconfig.json')),
     ).toBeUndefined();
   });
 
@@ -28,8 +28,8 @@ describe('missingTsconfigFile', () => {
     const root = tree({
       'tsconfig.json': '{ "extends": "./.nuxt/tsconfig.json" }',
     });
-    expect(missingTsconfigFile(ts, join(root, 'tsconfig.json'))).toBe(
-      join(root, '.nuxt/tsconfig.json'),
+    expect(missingTsconfigFile(ts, nodePath.join(root, 'tsconfig.json'))).toBe(
+      nodePath.join(root, '.nuxt/tsconfig.json'),
     );
   });
 
@@ -40,7 +40,7 @@ describe('missingTsconfigFile', () => {
         '{ "compilerOptions": { "paths": { "~/*": ["../*"] } }, /* generated */ "include": ["../src"] }',
     });
     expect(
-      missingTsconfigFile(ts, join(root, 'tsconfig.json')),
+      missingTsconfigFile(ts, nodePath.join(root, 'tsconfig.json')),
     ).toBeUndefined();
   });
 
@@ -50,15 +50,15 @@ describe('missingTsconfigFile', () => {
       'base.json': '{}',
     });
     expect(
-      missingTsconfigFile(ts, join(root, 'tsconfig.json')),
+      missingTsconfigFile(ts, nodePath.join(root, 'tsconfig.json')),
     ).toBeUndefined();
   });
 
   it('names a file that cannot be read as a tsconfig', () => {
     const root = tree({ 'tsconfig.json': '{ "extends": ' });
-    expect(() => missingTsconfigFile(ts, join(root, 'tsconfig.json'))).toThrow(
-      /cannot read/,
-    );
+    expect(() =>
+      missingTsconfigFile(ts, nodePath.join(root, 'tsconfig.json')),
+    ).toThrow(/cannot read/);
   });
 });
 
@@ -66,7 +66,7 @@ describe('effectiveTsconfig', () => {
   it('uses a config whose chain is complete as it is', () => {
     const root = tree({ 'tsconfig.json': '{}', 'package.json': '{}' });
     expect(effectiveTsconfig(root, undefined)).toBe(
-      join(root, 'tsconfig.json'),
+      nodePath.join(root, 'tsconfig.json'),
     );
   });
 
@@ -77,7 +77,7 @@ describe('effectiveTsconfig', () => {
       'package.json': '{}',
     });
     expect(effectiveTsconfig(root, undefined)).toBe(
-      join(root, 'tsconfig.json'),
+      nodePath.join(root, 'tsconfig.json'),
     );
   });
 
@@ -104,7 +104,7 @@ describe('optionalTsconfig', () => {
   it('needs no tsconfig for a module that writes no declarations', () => {
     const root = tree({ 'package.json': '{}' });
     expect(
-      optionalTsconfig(join(root, 'x'), 'tsconfig.build.json', false),
+      optionalTsconfig(nodePath.join(root, 'x'), 'tsconfig.build.json', false),
     ).toBeUndefined();
   });
 

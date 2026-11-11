@@ -1,8 +1,10 @@
 import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import type * as TypeScript from 'typescript';
+import path from 'node:path';
+import type TypeScript from 'typescript';
 
 import { LIB_TSCONFIG, PROJECT_TSCONFIG } from './defaults.js';
+
+const { dirname, join, resolve } = path;
 
 /** The TypeScript compiler module (the package's own, see `packageTypeScript`). */
 export type TS = typeof TypeScript;
@@ -64,6 +66,7 @@ export function packageTsconfig(
   if (tsconfig) return resolve(root, tsconfig);
   const own = [LIB_TSCONFIG, PROJECT_TSCONFIG]
     .map((name) => resolve(root, name))
+    // eslint-disable-next-line n/no-sync -- packageTsconfig is synchronous: plugin and nuxt-tsconfig read its result at config time
     .find((file) => existsSync(file));
   if (own) return own;
   for (
@@ -71,6 +74,7 @@ export function packageTsconfig(
     dir !== dirname(dir);
     dir = dirname(dir)
   )
+    // eslint-disable-next-line n/no-sync -- packageTsconfig is synchronous: plugin and nuxt-tsconfig read its result at config time
     if (existsSync(join(dir, PROJECT_TSCONFIG)))
       return join(dir, PROJECT_TSCONFIG);
   return undefined;

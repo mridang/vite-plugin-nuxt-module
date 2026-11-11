@@ -7,7 +7,7 @@ import { readPackageJson } from './package-json.js';
 
 /** The package a module id inside `node_modules` belongs to (`…/node_modules/@a/b/x.js` → `@a/b`). */
 export function nodeModulesPackage(id: string): string | undefined {
-  const path = id.replace(/[?#].*$/, '').replaceAll('\\', '/');
+  const path = id.replace(/[?#].*/s, '').replaceAll('\\', '/');
   const at = path.lastIndexOf('/node_modules/');
   if (at === -1) return undefined;
   const [scope = '', name = ''] = path
@@ -34,16 +34,15 @@ export function implicitDependencies(options: () => ResolvedOptions): Plugin {
     // Every module the bundle inlines is loaded; externals never are.
     load(id) {
       const name = nodeModulesPackage(id);
-      if (!name || reported.has(name)) return null;
+      if (!name || reported.has(name)) return;
       const { root, bundle } = options();
       if (matchesAny(name, bundle) || name === readPackageJson(root).name)
-        return null;
+        return;
       reported.add(name);
       this.warn({
         code: IMPLICIT_DEPENDENCY,
         message: `Implicitly bundling "${name}" into the module: it is not one of the module's dependencies or peerDependencies. Declare it, or list it in \`bundle\` to inline it on purpose.`,
       });
-      return null;
     },
   };
 }

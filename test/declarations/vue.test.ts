@@ -1,10 +1,12 @@
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import path from 'node:path';
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
 
 import { FIXTURE_TSCONFIG, fixture } from '../utils/fixture.js';
 import { requiredVueTools, vueTools } from '../../src/declarations/vue.js';
+
+const { join } = path;
 
 afterEach(() => {
   jest.resetModules();

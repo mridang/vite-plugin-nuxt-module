@@ -1,6 +1,7 @@
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { readFileSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { version as viteVersion } from 'vite';
 
 import { MODULE_JSON } from './defaults.js';
@@ -17,7 +18,11 @@ interface ModuleExport {
 /** The `name` and `version` of this package, read from the manifest next to `src` / `dist`. */
 function ownPackage(): { readonly name: string; readonly version: string } {
   return JSON.parse(
-    readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8'),
+    // eslint-disable-next-line n/no-sync -- builderMeta and moduleJson are synchronous and tested as such; async would ripple into them
+    readFileSync(
+      fileURLToPath(new URL('../package.json', import.meta.url)),
+      'utf8',
+    ),
   ) as {
     name: string;
     version: string;
@@ -53,12 +58,15 @@ export async function writeModuleJson(o: {
   readonly extension: string;
   readonly moduleMeta: Readonly<Record<string, unknown>> | undefined;
 }): Promise<void> {
-  const file = join(o.outDir, `module${o.extension}`);
+  const file = path.join(o.outDir, `module${o.extension}`);
   // eslint-disable-next-line no-unsanitized/method -- loads the module this build just wrote
   const mod = (await import(
     `${pathToFileURL(file).href}?t=${Date.now()}`
   )) as ModuleExport;
   const meta = (await mod.default?.getMeta?.()) ?? {};
   const json = moduleJson(meta, readPackageJson(o.root), o.moduleMeta);
-  writeFileSync(join(o.outDir, MODULE_JSON), JSON.stringify(json, null, 2));
+  await writeFile(
+    path.join(o.outDir, MODULE_JSON),
+    JSON.stringify(json, null, 2),
+  );
 }

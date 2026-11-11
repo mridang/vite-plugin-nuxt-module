@@ -6,7 +6,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import nodePath from 'node:path';
 import { afterEach, describe, expect, it } from '@jest/globals';
 
 import {
@@ -15,17 +15,23 @@ import {
   vueTransformer,
 } from '../src/vue-sfc.js';
 
+const { dirname, join } = nodePath;
+
 const dirs: string[] = [];
 function tree(files: Record<string, string>): string {
+  // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'nuxt-plugin-test-')));
   dirs.push(root);
   for (const [path, content] of Object.entries(files)) {
+    // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
     mkdirSync(dirname(join(root, path)), { recursive: true });
+    // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
     writeFileSync(join(root, path), content);
   }
   return root;
 }
 afterEach(() => {
+  // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
@@ -96,7 +102,8 @@ describe('vueTransformer', () => {
         'mb',
       ),
     });
-    expect((await vueTransformer(root)).vueLoader).toBe('own');
+    const loaded = await vueTransformer(root);
+    expect(loaded.vueLoader).toBe('own');
   });
 
   it('falls back to the copy nuxt-module-build reaches through its own dependencies', async () => {
@@ -112,7 +119,8 @@ describe('vueTransformer', () => {
         'mkdist',
       ),
     });
-    expect((await vueTransformer(root)).vueLoader).toBe('mkdist');
+    const loaded = await vueTransformer(root);
+    expect(loaded.vueLoader).toBe('mkdist');
   });
 });
 
@@ -141,8 +149,10 @@ describe('sfcSnippetLoader', () => {
       srcPath: join(root, 'src/runtime/C.vue.scss'),
       getContents: () => 'a { b: c }',
     });
+    const scssUrl = new URL(`file://${join(root, 'src/runtime/C.vue.scss')}`)
+      .href;
     expect(out).toEqual({
-      contents: `/* scss ${new URL(`file://${join(root, 'src/runtime/C.vue.scss')}`).href} */ a { b: c }`,
+      contents: `/* scss ${scssUrl} */ a { b: c }`,
       extension: '.css',
     });
   });

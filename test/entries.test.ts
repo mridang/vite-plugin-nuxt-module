@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import path from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
 import {
@@ -7,6 +7,8 @@ import {
   posixPath,
   resolvedEntries,
 } from '../src/entries.js';
+
+const { join } = path;
 
 describe('entryName', () => {
   it('drops the directory and the extension', () => {

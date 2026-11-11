@@ -1,4 +1,4 @@
-import { dirname, join, resolve } from 'node:path';
+import path from 'node:path';
 import { rolldown, type RolldownPlugin } from 'rolldown';
 import { dts as rolldownDts } from 'rolldown-plugin-dts';
 
@@ -20,6 +20,7 @@ import { selfReferenceOptions } from './self-reference.js';
 
 /** Imports with no types of their own (`./x.css?inline`, `./x.liquid`, `./x.svg?react`, `./x.module.scss`). */
 export const ASSET_IMPORT =
+  // eslint-disable-next-line sonarjs/regex-complexity -- one literal lists every asset format and CSS module extension, so the set reads in one place; splitting it scatters what counts as an asset
   /\?[a-z]+$|\.(css|liquid|svg|png|jpe?g|gif|webp|woff2?)$|\.module\.(css|scss|sass|less|styl|stylus|pcss|postcss|sss)$/;
 
 /**
@@ -49,6 +50,11 @@ const DECLARATION_SUFFIXES = {
   '.classes.d.ts': CSS_MODULE_DECLARATION,
 } as const;
 
+function assetSuffix(id: string): string | undefined {
+  if (STRING_ASSET_IMPORT.test(id)) return '.asset.d.ts';
+  return CSS_MODULE_IMPORT.test(id) ? '.classes.d.ts' : undefined;
+}
+
 /**
  * Asset imports in the declaration bundle. A string-valued one, or a CSS module, resolves to a
  * declaration module of its own, so the published types say what the import's value is instead of
@@ -61,14 +67,10 @@ function declarationAssets(): RolldownPlugin {
     name: `${PLUGIN_PREFIX}:dts-assets`,
     resolveId(id: string, importer?: string) {
       if (!ASSET_IMPORT.test(id)) return null;
-      const suffix = STRING_ASSET_IMPORT.test(id)
-        ? '.asset.d.ts'
-        : (CSS_MODULE_IMPORT.test(id)
-          ? '.classes.d.ts'
-          : undefined);
+      const suffix = assetSuffix(id);
       if (!suffix || !importer) return { id, external: true };
       return {
-        id: `${resolve(dirname(importer), id.replace(/\?.*$/, ''))}${suffix}`,
+        id: `${path.resolve(path.dirname(importer), id.replace(/\?.*/s, ''))}${suffix}`,
       };
     },
     load(id: string) {
@@ -145,7 +147,7 @@ export async function emitBundledTypes(
   const selfReference = selfReferenceOptions(
     o.root,
     o.outDir,
-    resolve(o.root, sourceRoot),
+    path.resolve(o.root, sourceRoot),
     o.tsconfig,
     o.entry,
   );
@@ -199,7 +201,7 @@ export async function emitBundledTypes(
     });
     for (const file of output)
       if (file.type === 'chunk' && file.isEntry)
-        written.push(join(o.outDir, file.fileName));
+        written.push(path.join(o.outDir, file.fileName));
   }
   await bundle.close();
   // Read with the options they were emitted under: the `paths` / `types` a framework hoists for its consumers.

@@ -53,6 +53,9 @@ function failure(log: BuildLog): Error {
   return new Error(`${code ?? 'warning'}: ${log.message}`);
 }
 
+/** A build outcome that has not failed yet. */
+const freshOutcome = (): BuildOutcome => ({ failed: false });
+
 /**
  * The warnings-as-errors policy of the module build: every warning fails it, except reports and
  * the codes in `allow`. Both hooks are needed: some warnings (e.g. EMPTY_IMPORT_META, raised
@@ -60,7 +63,7 @@ function failure(log: BuildLog): Error {
  */
 export function failOnWarnings(
   allow: readonly string[],
-  outcome: BuildOutcome = { failed: false },
+  outcome: BuildOutcome = freshOutcome(),
 ) {
   const fail = (log: BuildLog): never => {
     outcome.failed = true;
@@ -254,7 +257,7 @@ function onClose(
     },
     closeBundle() {
       const resolved = config;
-      if (!resolved) return;
+      if (!resolved) return undefined;
       // Under `--watch` the next rebuild can start before this step ends (Vite does not wait for
       // it): the outcome is read now, the runs go one at a time, and a failure is recorded only
       // while no later build has started.

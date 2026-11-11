@@ -1,6 +1,6 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import nodePath from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
 import {
@@ -12,8 +12,10 @@ import {
 } from '../src/externals.js';
 
 function packageRoot(pkg: Record<string, unknown>): string {
-  const root = mkdtempSync(join(tmpdir(), 'vite-externals-'));
-  writeFileSync(join(root, 'package.json'), JSON.stringify(pkg));
+  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+  const root = mkdtempSync(nodePath.join(tmpdir(), 'vite-externals-'));
+  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+  writeFileSync(nodePath.join(root, 'package.json'), JSON.stringify(pkg));
   return root;
 }
 

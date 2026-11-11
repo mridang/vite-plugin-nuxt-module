@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import nodePath from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
 import { FIXTURE_TSCONFIG, fixture, output } from './utils/fixture.js';
@@ -76,18 +76,20 @@ describe('emitRuntimeDeclarations', () => {
       },
       { link },
     );
-  const emit = (root: string, scripts: string[], vues: string[] = []) =>
-    emitRuntimeDeclarations(
+  const emit = (root: string, scripts: string[], vues: string[] = []) => {
+    let tsconfig: string | undefined;
+    return emitRuntimeDeclarations(
       {
         root,
-        runtimeDir: join(root, 'src/runtime'),
-        outDir: join(root, 'dist'),
-        tsconfig: undefined,
-        scope: { runtimeDir: join(root, 'src/runtime'), entries: {} },
+        runtimeDir: nodePath.join(root, 'src/runtime'),
+        outDir: nodePath.join(root, 'dist'),
+        tsconfig,
+        scope: { runtimeDir: nodePath.join(root, 'src/runtime'), entries: {} },
       },
-      scripts.map((f) => join(root, f)),
-      vues.map((f) => join(root, f)),
+      scripts.map((f) => nodePath.join(root, f)),
+      vues.map((f) => nodePath.join(root, f)),
     );
+  };
 
   it('declares every runtime script, with explicit extensions', async () => {
     const root = module({

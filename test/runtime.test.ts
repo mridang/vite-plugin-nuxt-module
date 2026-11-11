@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import nodePath from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
 import {
@@ -17,23 +17,31 @@ import {
   runtimeImportTypes,
 } from '../src/runtime.js';
 
+const { join } = nodePath;
+
 /** A module root with `files` under it and a fake Sass that wraps the source in a comment. */
 function moduleRoot(files: Record<string, string>): string {
   const root = withTools({ name: 'mod', type: 'module' }, {});
   const sass = join(root, 'node_modules/sass');
+  // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
   mkdirSync(sass, { recursive: true });
+  // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
   writeFileSync(
     join(sass, 'package.json'),
     JSON.stringify({ name: 'sass', type: 'module', exports: './index.js' }),
   );
+  // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
   writeFileSync(
     join(sass, 'index.js'),
     'import { readFileSync } from "node:fs";\nexport const compile = (file) => ({ css: `/* compiled */ ${readFileSync(file, "utf8")}` });\nexport const compileString = () => ({ css: "" });\n',
   );
   for (const [name, text] of Object.entries(files)) {
+    // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
     mkdirSync(join(root, name, '..'), { recursive: true });
+    // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
     writeFileSync(join(root, name), text);
   }
+  // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
   writeFileSync(join(root, 'tsconfig.json'), '{}');
   return root;
 }
@@ -73,6 +81,7 @@ describe('buildRuntime', () => {
     });
     await build(root);
     expect([
+      // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
       readdirSync(join(root, 'dist/runtime')),
       output(root, 'dist/runtime/style.css'),
     ]).toEqual([['style.css'], "/* compiled */ @use 'partial';"]);
@@ -88,6 +97,7 @@ describe('buildRuntime', () => {
     await build(root);
     expect([
       output(root, 'dist/runtime/plugin.js'),
+      // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
       existsSync(join(root, 'dist/runtime/data.json')),
     ]).toEqual([expect.stringContaining('from "./lib/x.js"'), true]);
   });
@@ -202,6 +212,7 @@ describe('runtime imports of bundled entries', () => {
     );
     const out = join(root, 'build/out');
     const shared =
+      // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
       readdirSync(join(out, 'shared')).find((f) => f.endsWith('.mjs')) ?? '';
     return { out, shared };
   };
@@ -276,6 +287,7 @@ const fakeSass = {
 };
 
 async function buildPrepared(root: string, dts = false): Promise<void> {
+  let tsconfig: string | undefined;
   await buildRuntime({
     root,
     entry: { module: join(root, 'src/module.ts') },
@@ -283,7 +295,7 @@ async function buildPrepared(root: string, dts = false): Promise<void> {
     exclude: [],
     extension: '.mjs',
     dts,
-    tsconfig: undefined,
+    tsconfig,
     outDir: join(root, 'dist'),
   });
 }
@@ -299,7 +311,7 @@ describe('buildRuntime of a prepared module', () => {
         'export class Counter {\n  count!: number;\n}\n',
     });
     await buildPrepared(root);
-    expect(built(root, 'counter.js')).toMatch(/^\s*count;$/m);
+    expect(built(root, 'counter.js')).toMatch(/^[ \t]*count;$/m);
   });
 
   it('drops a declared class field when the tsconfig turns useDefineForClassFields off', async () => {
@@ -311,7 +323,7 @@ describe('buildRuntime of a prepared module', () => {
         'export class Counter {\n  count!: number;\n}\n',
     });
     await buildPrepared(root);
-    expect(built(root, 'counter.js')).not.toMatch(/^\s*count;$/m);
+    expect(built(root, 'counter.js')).not.toMatch(/^[ \t]*count;$/m);
   });
 
   it('fails when the module was not prepared, instead of guessing its compiler options', async () => {
@@ -331,6 +343,7 @@ describe('buildRuntime of a prepared module', () => {
     await buildPrepared(root);
     expect([
       built(root, 'assets/main.css'),
+      // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
       existsSync(join(root, 'dist/runtime/assets/main.scss')),
     ]).toEqual(['/* compiled main.scss */', false]);
   });
@@ -343,6 +356,7 @@ describe('buildRuntime of a prepared module', () => {
       'src/runtime/assets/main.scss': 'a { b: c }',
     });
     await buildPrepared(root);
+    // eslint-disable-next-line n/no-sync -- test setup: sync fs keeps the fixture files inline in the test
     expect(existsSync(join(root, 'dist/runtime/assets/_vars.scss'))).toBe(
       false,
     );

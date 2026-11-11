@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import nodePath from 'node:path';
 import { afterEach, describe, expect, it } from '@jest/globals';
 
 import { buildFixture } from './utils/fixture.js';
@@ -17,15 +17,22 @@ import type { NuxtModuleOptions } from '../src/options.js';
 
 const dirs: string[] = [];
 function tree(files: Record<string, string>): string {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'nuxt-implicit-test-')));
+  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+  const root = realpathSync(
+    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+    mkdtempSync(nodePath.join(tmpdir(), 'nuxt-implicit-test-')),
+  );
   dirs.push(root);
   for (const [path, content] of Object.entries(files)) {
-    mkdirSync(dirname(join(root, path)), { recursive: true });
-    writeFileSync(join(root, path), content);
+    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+    mkdirSync(nodePath.dirname(nodePath.join(root, path)), { recursive: true });
+    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+    writeFileSync(nodePath.join(root, path), content);
   }
   return root;
 }
 afterEach(() => {
+  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
@@ -74,16 +81,18 @@ describe('implicitDependencies', () => {
   it('inlines it anyway when its warning code is allowed', async () => {
     const root = tree(moduleWithDevDependency);
     await buildModule(root, { allowWarnings: [IMPLICIT_DEPENDENCY] });
-    expect(readFileSync(join(root, 'dist/module.mjs'), 'utf8')).toContain(
-      'const help = ',
-    );
+    expect(
+      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+      readFileSync(nodePath.join(root, 'dist/module.mjs'), 'utf8'),
+    ).toContain('const help = ');
   }, 60_000);
 
   it('inlines a package listed in bundle', async () => {
     const root = tree(moduleWithDevDependency);
     await buildModule(root, { bundle: ['helper'] });
-    expect(readFileSync(join(root, 'dist/module.mjs'), 'utf8')).toContain(
-      'const help = ',
-    );
+    expect(
+      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+      readFileSync(nodePath.join(root, 'dist/module.mjs'), 'utf8'),
+    ).toContain('const help = ');
   }, 60_000);
 });

@@ -1,5 +1,5 @@
 import { existsSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import path from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
 import { FIXTURE_TSCONFIG, fixture, output } from '../utils/fixture.js';
@@ -12,6 +12,8 @@ import {
   mergedCompilerOptions,
   STRING_ASSET_IMPORT,
 } from '../../src/declarations/bundle.js';
+
+const { join, resolve } = path;
 
 /** Writes the bundled declarations of `src/index.ts` of a fixture into its `dist`. */
 const emit = (
@@ -90,6 +92,7 @@ describe('emitBundledTypes', () => {
       'src/index.ts': 'export const before = 1;\n',
     });
     await emit(root);
+    // eslint-disable-next-line n/no-sync -- sync is fine in a script or bootstrap: a test writes its fixture
     writeFileSync(join(root, 'src/index.ts'), 'export const after = 1;\n');
     await emit(root);
     expect(output(root, 'dist/index.d.mts')).toContain('after');
@@ -216,7 +219,10 @@ describe('emitBundledTypes assets', () => {
       sources: string[];
     };
     expect(
-      sources.filter((source) => !existsSync(resolve(root, 'dist', source))),
+      sources.filter(
+        // eslint-disable-next-line n/no-sync -- sync is fine in a script or bootstrap: a test checks its build output
+        (source) => !existsSync(resolve(root, 'dist', source)),
+      ),
     ).toEqual([]);
   }, 60_000);
 });
@@ -225,6 +231,7 @@ describe('emitBundledTypes warnings', () => {
   const warning: RolldownPlugin = {
     name: 'warns',
     buildStart() {
+      // eslint-disable-next-line unicorn/no-this-outside-of-class -- a rolldown hook is called with its plugin context as this
       this.warn({ message: 'careful', code: 'OWN_CODE' });
     },
   };
@@ -238,6 +245,7 @@ describe('emitBundledTypes warnings', () => {
   it('allows a plugin warning by the code its plugin gave it, like the JS build', async () => {
     const root = plain();
     await emit(root, [], { plugins: [warning], allowWarnings: ['OWN_CODE'] });
+    // eslint-disable-next-line n/no-sync -- sync is fine in a script or bootstrap: a test checks its build output
     expect(existsSync(join(root, 'dist/index.d.mts'))).toBe(true);
   }, 60_000);
 

@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import path from 'node:path';
 import type { Plugin, UserConfig } from 'vite';
 
 import { NODE_TARGET, OUT_DIR, PLUGIN_PREFIX } from './defaults.js';
@@ -61,7 +61,7 @@ export function nuxtModule(options: NuxtModuleOptions = {}): Plugin[] {
     apply: 'build',
     enforce: 'pre',
     async config(user) {
-      const root = resolve(user.root ?? process.cwd());
+      const root = path.resolve(user.root ?? process.cwd());
       const o = resolveOptions(options, root, user);
       resolved = o;
       if (o.prepare) await prepareModule(root, o.entry.module ?? '');
@@ -98,6 +98,7 @@ export function buildConfig(
   return {
     // The JS compiles with the same tsconfig as the types (decorators, class fields), not with
     // whichever tsconfig.json is nearest each file. Without one, Vite looks for the nearest itself.
+    // eslint-disable-next-line n/no-sync -- buildConfig is synchronous and returns a config object its tests read directly
     ...(tsconfig && existsSync(tsconfig) ? { tsconfig } : {}),
     ...(user.customLogger ? {} : { customLogger }),
     ...(user.publicDir === undefined ? { publicDir: false } : {}),

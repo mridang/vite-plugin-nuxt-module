@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { resolve } from 'node:path';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { realPackageDirectory, resolveFromRoot } from './resolve.js';
@@ -73,11 +73,11 @@ export async function prepareModule(
   const options = {
     cli: pathToFileURL(cli).href,
     root,
-    module: resolve(root, moduleEntry),
+    module: path.resolve(root, moduleEntry),
     overrides: PREPARE_OVERRIDES,
   };
   const { code, out } = await new Promise<{ code: number; out: string }>(
-    (done) => {
+    (resolve) => {
       const child = spawn(
         process.execPath,
         ['--input-type=module', '-e', PREPARE_SCRIPT],
@@ -94,7 +94,7 @@ export async function prepareModule(
       child.stderr.on('data', (d) => {
         text += d;
       });
-      child.on('close', (exit) => done({ code: exit ?? 1, out: text }));
+      child.on('close', (exit) => resolve({ code: exit ?? 1, out: text }));
     },
   );
   if (code !== 0)

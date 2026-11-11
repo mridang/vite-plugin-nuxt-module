@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import path from 'node:path';
 
 /** The `package.json` fields this package reads. */
 export interface PackageJson {
@@ -18,7 +18,8 @@ export interface PackageJson {
 /** The `package.json` of the package at `root`. */
 export function readPackageJson(root: string): PackageJson {
   return JSON.parse(
-    readFileSync(resolve(root, 'package.json'), 'utf8'),
+    // eslint-disable-next-line n/no-sync -- readPackageJson is synchronous: externals, options and tests call it synchronously
+    readFileSync(path.resolve(root, 'package.json'), 'utf8'),
   ) as PackageJson;
 }
 
@@ -40,9 +41,9 @@ const PUBLISHED_FIELDS = [
 /** Every string a JSON value holds, nested ones included. */
 function strings(value: unknown): string[] {
   if (typeof value === 'string') return [value];
-  if (Array.isArray(value)) return value.flatMap(strings);
+  if (Array.isArray(value)) return value.flatMap((item) => strings(item));
   if (value && typeof value === 'object')
-    return Object.values(value).flatMap(strings);
+    return Object.values(value).flatMap((item) => strings(item));
   return [];
 }
 
@@ -54,6 +55,6 @@ function strings(value: unknown): string[] {
 export function namesFile(root: string, file: string): boolean {
   const pkg = readPackageJson(root);
   return PUBLISHED_FIELDS.flatMap((field) => strings(pkg[field])).some(
-    (target) => resolve(root, target) === resolve(file),
+    (target) => path.resolve(root, target) === path.resolve(file),
   );
 }

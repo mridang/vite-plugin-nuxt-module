@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process';
-import { cpSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+// eslint-disable-next-line n/no-unsupported-features/node-builtins -- experimental API used on purpose: test fixture copy, Node 22.0 floor
+import { cpSync } from 'node:fs';
+import { mkdir, readdir, rm } from 'node:fs/promises';
+import path from 'node:path';
 import ts from 'typescript';
 import { build } from 'vite';
 
@@ -8,6 +10,8 @@ import nuxtModule from '../../src/index.js';
 import '../utils/realm.js';
 
 import { FIXTURES, PACKAGE_ROOT } from './paths.js';
+
+const { join } = path;
 
 /** The name the fixture module is published and installed under. */
 export const MODULE_NAME = 'hello-timing';
@@ -29,7 +33,7 @@ export function run(
   args: readonly string[],
   options: { readonly cwd: string; readonly env?: typeof process.env },
 ): Promise<string> {
-  return new Promise((done, fail) => {
+  return new Promise((resolve, reject) => {
     const child = spawn(command, [...args], {
       cwd: options.cwd,
       env: { ...process.env, ...options.env },
@@ -42,11 +46,11 @@ export function run(
     child.stderr.on('data', (chunk) => {
       output += chunk;
     });
-    child.on('error', fail);
+    child.on('error', reject);
     child.on('close', (code) =>
       code === 0
-        ? done(output)
-        : fail(
+        ? resolve(output)
+        : reject(
             new Error(
               `${command} ${args.join(' ')} exited with ${code}\n${output}`,
             ),
@@ -57,6 +61,7 @@ export function run(
 
 /** A copy of the fixture `name` in `into`. */
 export function copyFixture(name: 'module' | 'app', into: string): string {
+  // eslint-disable-next-line n/no-sync -- copyFixture is synchronous: callers use the returned path at once
   cpSync(join(FIXTURES, name), into, { recursive: true });
   return into;
 }
@@ -79,9 +84,10 @@ export async function packModule(
   packageDir: string,
   into: string,
 ): Promise<string> {
-  mkdirSync(into, { recursive: true });
+  await mkdir(into, { recursive: true });
   await run('npm', ['pack', '--pack-destination', into], { cwd: packageDir });
-  const tarball = readdirSync(into).find((file) => file.endsWith('.tgz'));
+  const entries = await readdir(into);
+  const tarball = entries.find((file) => file.endsWith('.tgz'));
   if (!tarball) throw new Error(`npm pack wrote no tarball into ${into}`);
   return join(into, tarball);
 }
@@ -93,8 +99,8 @@ export async function installModule(
   name: string = MODULE_NAME,
 ): Promise<string> {
   const target = join(appDir, 'node_modules', name);
-  rmSync(target, { recursive: true, force: true });
-  mkdirSync(target, { recursive: true });
+  await rm(target, { recursive: true, force: true });
+  await mkdir(target, { recursive: true });
   await run('tar', ['-xzf', tarball, '-C', target, '--strip-components=1'], {
     cwd: appDir,
   });
@@ -136,7 +142,7 @@ export function typeErrors(appDir: string, file: string): string[] {
   );
   if (!parsed) throw new Error(`cannot read ${tsconfig}`);
   const ambient = parsed.fileNames.filter((name) => /\.d\.[cm]?ts$/.test(name));
-  const target = resolve(appDir, file);
+  const target = path.resolve(appDir, file);
   const program = ts.createProgram({
     rootNames: [...ambient, target],
     options: parsed.options,

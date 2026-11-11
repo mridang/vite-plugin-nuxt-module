@@ -1,11 +1,6 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
-import { dirname, join, posix, relative, resolve, sep } from 'node:path';
+import { existsSync } from 'node:fs';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { RolldownMagicString, type RolldownPlugin } from 'rolldown';
 import { type Plugin, transformWithOxc } from 'vite';
 
@@ -37,6 +32,8 @@ import {
 import { optionalTsconfig } from './nuxt-tsconfig.js';
 import { transformSfc } from './vue-sfc.js';
 
+const { dirname, join, posix, relative, resolve, sep } = path;
+
 /**
  * The module's runtime directory (absolute): the one given, which must exist, else `src/runtime`
  * when the module has one; `undefined` for `runtimeDir: false`.
@@ -47,6 +44,7 @@ export function moduleRuntimeDir(
 ): string | undefined {
   if (runtimeDir === false) return undefined;
   const dir = resolve(root, runtimeDir ?? NUXT_RUNTIME_DIR);
+  // eslint-disable-next-line n/no-sync -- moduleRuntimeDir is synchronous: config-time callers need the directory at once
   if (existsSync(dir)) return dir;
   if (runtimeDir !== undefined)
     throw new Error(`nuxtModule: runtime directory ${runtimeDir} not found`);
@@ -196,6 +194,7 @@ export function nuxtRuntimeExternals(
       if (id.startsWith(RUNTIME_SPECIFIER)) return { id, external: true };
       if (!importer || (!/^\.\.?\//.test(id) && !id.startsWith(dir)))
         return null;
+      // eslint-disable-next-line unicorn/no-this-outside-of-class -- a rollup plugin hook receives its plugin context as this
       const resolved = await this.resolve(id, importer, {
         ...opts,
         skipSelf: true,
@@ -240,13 +239,9 @@ export function declarationRuntimeExternals(
     name: `${PLUGIN_PREFIX}:dts-runtime-externals`,
     resolveId(id: string, importer?: string) {
       // Like rollup-plugin-dts' default: types of any package (declared or not) are imported, never inlined.
-      if (
-        importer &&
-        !/^\.\.?(\/|$)/.test(id) &&
-        !id.startsWith('/') &&
-        !id.startsWith('\0') &&
-        !id.startsWith(RUNTIME_SPECIFIER)
-      )
+      const isBare =
+        !/^\.\.?(\/|$)/.test(id) && !id.startsWith('/') && !id.startsWith('\0');
+      if (importer && isBare && !id.startsWith(RUNTIME_SPECIFIER))
         return { id, external: true };
       return imports.resolveId(id, importer);
     },
@@ -277,45 +272,43 @@ export async function buildRuntime(o: RuntimeOptions): Promise<void> {
     (f) => !isSassPartial(f),
   );
   const scope = specifierScope(o);
-  rmSync(out, { recursive: true, force: true });
+  await rm(out, { recursive: true, force: true });
   const scripts: string[] = [];
   // The module's own tsconfig (its chain checked), so oxc honours what it sets: `useDefineForClassFields`, JSX.
   const tsconfig = optionalTsconfig(o.root, o.tsconfig, o.dts);
   for (const rel of files) {
     const from = join(o.runtimeDir, rel);
     const dest = join(out, runtimeOutName(rel));
-    mkdirSync(dirname(dest), { recursive: true });
+    await mkdir(dirname(dest), { recursive: true });
     if (DECLARATION_RE.test(rel)) {
-      writeFileSync(
+      await writeFile(
         dest,
         rewriteRuntimeTypeAliases(
-          rewriteDeclarationImports(readFileSync(from, 'utf8'), from, scope),
+          rewriteDeclarationImports(await readFile(from, 'utf8'), from, scope),
         ),
       );
     } else if (SCRIPT_RE.test(rel)) {
-      const source = readFileSync(from, 'utf8');
-      const code = /\.(?:[cm]?tsx?|jsx)$/.test(rel)
-        ? (
-            await transformWithOxc(source, from, {
-              target: 'esnext',
-              sourcemap: false,
-              tsconfig,
-              jsx: {
-                runtime: 'automatic',
-                importSource: 'vue',
-                development: false,
-              },
-            })
-          ).code
-        : source;
-      writeFileSync(dest, rewriteImports(code, from, scope));
+      const source = await readFile(from, 'utf8');
+      const { code } = /\.(?:[cm]?tsx?|jsx)$/.test(rel)
+        ? await transformWithOxc(source, from, {
+            target: 'esnext',
+            sourcemap: false,
+            tsconfig,
+            jsx: {
+              runtime: 'automatic',
+              importSource: 'vue',
+              development: false,
+            },
+          })
+        : { code: source };
+      await writeFile(dest, rewriteImports(code, from, scope));
       scripts.push(from);
     } else if (SASS_RE.test(rel)) {
-      writeFileSync(dest, await compileSass(o.root, from, false));
+      await writeFile(dest, await compileSass(o.root, from, false));
     } else if (rel.endsWith('.vue')) {
-      writeFileSync(dest, await transformSfc(o.root, from, rel));
+      await writeFile(dest, await transformSfc(o.root, from, rel));
     } else {
-      writeFileSync(dest, readFileSync(from));
+      await writeFile(dest, await readFile(from));
     }
   }
   if (o.dts) {

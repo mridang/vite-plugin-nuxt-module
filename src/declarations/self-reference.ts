@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import path from 'node:path';
 
 import { posixPath } from '../entries.js';
 import { escapeRegExp } from '../externals.js';
@@ -33,9 +33,11 @@ export function typesTarget(entry: unknown): string | undefined {
 
 /** Whether a source file under `entryRoot` names package `name` (`"name"` or `"name/…"`). */
 function importsItself(entryRoot: string, name: string): boolean {
+  // eslint-disable-next-line n/no-sync -- selfReferenceOptions is synchronous and tested as such; async would ripple into it
   if (!existsSync(entryRoot)) return false;
   return walk(entryRoot).some((file) => {
-    const text = readFileSync(join(entryRoot, file), 'utf8');
+    // eslint-disable-next-line n/no-sync -- walk and selfReferenceOptions are synchronous; async reads would ripple into them
+    const text = readFileSync(path.join(entryRoot, file), 'utf8');
     return (
       text.includes(`"${name}"`) ||
       text.includes(`"${name}/`) ||
@@ -69,13 +71,15 @@ export function selfReferenceOptions(
     : { '.': pkg.exports };
   for (const [sub, target] of Object.entries(map)) {
     const types = typesTarget(target);
-    if (!types || sub.includes('*')) continue;
-    const rel = relative(dtsOutDir, resolve(root, types));
-    if (rel.startsWith('..')) continue;
+    const rel = types
+      ? path.relative(dtsOutDir, path.resolve(root, types))
+      : '..';
+    if (!types || sub.includes('*') || rel.startsWith('..')) continue;
     const name = posixPath(rel.replace(/\.d\.[cm]?ts$/, ''));
-    const base = resolve(entryRoot, name);
+    const base = path.resolve(entryRoot, name);
     const source =
       entries[name] ??
+      // eslint-disable-next-line n/no-sync -- selfReferenceOptions is synchronous and tested as such; async would ripple into it
       SOURCE_EXTENSIONS.map((e) => base + e).find((f) => existsSync(f));
     if (source)
       paths[sub === '.' ? pkg.name : `${pkg.name}${sub.slice(1)}`] = [source];
@@ -85,6 +89,7 @@ export function selfReferenceOptions(
   const names = Object.keys(paths).map(
     (n) => new RegExp(`^${escapeRegExp(n)}$`),
   );
+  // eslint-disable-next-line n/no-sync -- selfReferenceOptions is synchronous and tested as such; async would ripple into it
   const own = existsSync(tsconfig)
     ? absolutePaths(
         parsedTsconfig(packageTypeScript(root), tsconfig).options,

@@ -1,6 +1,6 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import nodePath from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
 import {
@@ -10,8 +10,10 @@ import {
 } from '../src/package-json.js';
 
 function packageRoot(pkg: Record<string, unknown>): string {
-  const root = mkdtempSync(join(tmpdir(), 'vite-package-json-'));
-  writeFileSync(join(root, 'package.json'), JSON.stringify(pkg));
+  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+  const root = mkdtempSync(nodePath.join(tmpdir(), 'vite-package-json-'));
+  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+  writeFileSync(nodePath.join(root, 'package.json'), JSON.stringify(pkg));
   return root;
 }
 
@@ -47,6 +49,8 @@ describe('namesFile', () => {
     [{}, false],
   ])('%j names dist/types.d.mts: %s', (pkg, expected) => {
     const root = packageRoot(pkg);
-    expect(namesFile(root, join(root, 'dist/types.d.mts'))).toBe(expected);
+    expect(namesFile(root, nodePath.join(root, 'dist/types.d.mts'))).toBe(
+      expected,
+    );
   });
 });

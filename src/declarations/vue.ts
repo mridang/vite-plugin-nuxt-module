@@ -1,6 +1,10 @@
 import { createRequire } from 'node:module';
-import { dirname } from 'node:path';
-import type * as TypeScript from 'typescript';
+import path from 'node:path';
+import type {
+  CompilerOptions,
+  CreateProgramOptions,
+  ParseConfigHost,
+} from 'typescript';
 
 import { realPackageDirectory, requireFrom } from '../resolve.js';
 import type { TS } from '../tsconfig.js';
@@ -9,14 +13,14 @@ import type { TS } from '../tsconfig.js';
 interface VueLanguageCore {
   createParsedCommandLine(
     ts: TS,
-    host: TypeScript.ParseConfigHost,
+    host: ParseConfigHost,
     file: string,
   ): {
     readonly vueOptions: unknown;
   };
   createVueLanguagePlugin(
     ts: TS,
-    options: TypeScript.CompilerOptions,
+    options: CompilerOptions,
     vueOptions: unknown,
     asFileName: (id: string) => string,
   ): unknown;
@@ -27,7 +31,7 @@ interface VolarTypescript {
   proxyCreateProgram(
     ts: TS,
     original: TS['createProgram'],
-    create: (ts: TS, options: TypeScript.CreateProgramOptions) => unknown[],
+    create: (ts: TS, options: CreateProgramOptions) => unknown[],
   ): TS['createProgram'];
 }
 
@@ -48,7 +52,7 @@ export function vueTools(root: string): VueTools | undefined {
   let vueTscDir = realPackageDirectory('vue-tsc', root);
   if (vueTscDir === undefined) {
     try {
-      vueTscDir = dirname(
+      vueTscDir = path.dirname(
         createRequire(import.meta.url).resolve('vue-tsc/package.json'),
       );
     } catch {

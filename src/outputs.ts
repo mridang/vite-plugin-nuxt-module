@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import path from 'node:path';
 import type { Plugin } from 'vite';
 
 import { emitBundledTypes } from './declarations/bundle.js';
@@ -54,7 +54,7 @@ export function hoistedTypePaths(root: string): Record<string, string[]> {
     paths[`${name}/*`] = [`${dir}/*`];
   }
   const nuxt = realPackageDirectory('nuxt', root);
-  if (nuxt) paths['#app/nuxt'] = [join(nuxt, 'dist/app/nuxt')];
+  if (nuxt) paths['#app/nuxt'] = [path.join(nuxt, 'dist/app/nuxt')];
   return paths;
 }
 
@@ -95,9 +95,11 @@ export function writeCompatibleDeclarations(
   names: readonly string[],
 ): void {
   for (const name of names) {
-    const mts = join(outDir, `${name}.d.mts`);
+    const mts = path.join(outDir, `${name}.d.mts`);
+    // eslint-disable-next-line n/no-sync -- writeCompatibleDeclarations is synchronous and tested as such; async would ripple into it
     if (existsSync(mts))
-      writeFileSync(join(outDir, `${name}.d.ts`), readFileSync(mts));
+      // eslint-disable-next-line n/no-sync -- same synchronous helper as the check above
+      writeFileSync(path.join(outDir, `${name}.d.ts`), readFileSync(mts));
   }
 }
 
@@ -107,10 +109,10 @@ export function writeCompatibleDeclarations(
  * first (steps run in plugin order).
  */
 export function nuxtRuntime(options: () => ResolvedOptions): Plugin {
-  return afterBuild(`${PLUGIN_PREFIX}:runtime`, (config) => {
+  return afterBuild(`${PLUGIN_PREFIX}:runtime`, async (config) => {
     const o = options();
     if (!o.runtimeDir) return;
-    return buildRuntime({
+    await buildRuntime({
       root: o.root,
       entry: o.entry,
       runtimeDir: o.runtimeDir,
@@ -118,7 +120,7 @@ export function nuxtRuntime(options: () => ResolvedOptions): Plugin {
       extension: o.extension,
       dts: o.dts,
       tsconfig: o.tsconfig,
-      outDir: resolve(config.root, config.build.outDir),
+      outDir: path.resolve(config.root, config.build.outDir),
     });
   });
 }
@@ -130,7 +132,7 @@ export function nuxtRuntime(options: () => ResolvedOptions): Plugin {
 export function nuxtModuleOutputs(options: () => ResolvedOptions): Plugin {
   return afterBuild(`${PLUGIN_PREFIX}:outputs`, async (config) => {
     const o = options();
-    const outDir = resolve(config.root, config.build.outDir);
+    const outDir = path.resolve(config.root, config.build.outDir);
     if (o.dts) {
       const tsconfig = effectiveTsconfig(o.root, o.tsconfig);
       await emitBundledTypes({

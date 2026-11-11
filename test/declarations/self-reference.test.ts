@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import path from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
 import { fixture } from '../utils/fixture.js';
@@ -6,6 +6,8 @@ import {
   selfReferenceOptions,
   typesTarget,
 } from '../../src/declarations/self-reference.js';
+
+const { join } = path;
 
 function selfReferencing(
   exportsMap: unknown,

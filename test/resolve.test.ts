@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import nodePath from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from '@jest/globals';
 
@@ -15,10 +15,13 @@ import {
 } from '../src/resolve.js';
 
 function tree(files: Record<string, string>): string {
-  const root = mkdtempSync(join(tmpdir(), 'vite-resolve-'));
+  // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+  const root = mkdtempSync(nodePath.join(tmpdir(), 'vite-resolve-'));
   for (const [path, content] of Object.entries(files)) {
-    mkdirSync(dirname(join(root, path)), { recursive: true });
-    writeFileSync(join(root, path), content);
+    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+    mkdirSync(nodePath.dirname(nodePath.join(root, path)), { recursive: true });
+    // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+    writeFileSync(nodePath.join(root, path), content);
   }
   return root;
 }
@@ -91,9 +94,8 @@ describe('importFromRoot', () => {
       }),
       'node_modules/tool/index.cjs': "exports.version = 'local';",
     });
-    expect(
-      (await importFromRoot<{ version: string }>('tool', root)).version,
-    ).toBe('local');
+    const tool = await importFromRoot<{ version: string }>('tool', root);
+    expect(tool.version).toBe('local');
   });
 
   it('reads the import target of an ESM-only package from its exports map', async () => {
@@ -101,9 +103,8 @@ describe('importFromRoot', () => {
       { './sub': { import: './sub.js' }, './package.json': './package.json' },
       { 'sub.js': "export const kind = 'esm';" },
     );
-    expect(
-      (await importFromRoot<{ kind: string }>('esm-tool/sub', root)).kind,
-    ).toBe('esm');
+    const sub = await importFromRoot<{ kind: string }>('esm-tool/sub', root);
+    expect(sub.kind).toBe('esm');
   });
 
   it('imports an ESM-only package that does not export its package.json', async () => {
@@ -111,9 +112,8 @@ describe('importFromRoot', () => {
       { '.': { import: './i.js' } },
       { 'i.js': "export const kind = 'esm';" },
     );
-    expect(
-      (await importFromRoot<{ kind: string }>('esm-tool', root)).kind,
-    ).toBe('esm');
+    const tool = await importFromRoot<{ kind: string }>('esm-tool', root);
+    expect(tool.kind).toBe('esm');
   });
 
   it('imports an ESM-only package whose exports use condition sugar', async () => {
@@ -121,9 +121,8 @@ describe('importFromRoot', () => {
       { types: './i.d.ts', import: './i.js' },
       { 'i.js': "export const kind = 'sugar';" },
     );
-    expect(
-      (await importFromRoot<{ kind: string }>('esm-tool', root)).kind,
-    ).toBe('sugar');
+    const tool = await importFromRoot<{ kind: string }>('esm-tool', root);
+    expect(tool.kind).toBe('sugar');
   });
 
   it('fails for a package that is not installed', async () => {
@@ -142,7 +141,8 @@ describe('realPackageDirectory', () => {
       }),
     });
     expect(realPackageDirectory('hidden', root)).toBe(
-      realpathSync(join(root, 'node_modules/hidden')),
+      // eslint-disable-next-line n/no-sync -- sync is fine in a test helper
+      realpathSync(nodePath.join(root, 'node_modules/hidden')),
     );
   });
 
@@ -163,7 +163,7 @@ describe('resolveFromRoot', () => {
   it('finds the package.json of a package that does not export it', () => {
     const root = esmTool({ import: './i.js' }, {});
     expect(resolveFromRoot('esm-tool/package.json', root)).toBe(
-      join(root, 'node_modules/esm-tool/package.json'),
+      nodePath.join(root, 'node_modules/esm-tool/package.json'),
     );
   });
 });
@@ -175,12 +175,12 @@ describe('packageDirectory', () => {
       'pkg/package.json': '{}',
     });
     const previous = process.env.NODE_PATH;
-    process.env.NODE_PATH = join(root, 'elsewhere');
+    process.env.NODE_PATH = nodePath.join(root, 'elsewhere');
     try {
       expect([
-        packageDirectory('up-tool', join(root, 'pkg')),
-        packageDirectory('missing-tool', join(root, 'pkg')),
-      ]).toEqual([join(root, 'node_modules/up-tool'), undefined]);
+        packageDirectory('up-tool', nodePath.join(root, 'pkg')),
+        packageDirectory('missing-tool', nodePath.join(root, 'pkg')),
+      ]).toEqual([nodePath.join(root, 'node_modules/up-tool'), undefined]);
     } finally {
       process.env.NODE_PATH = previous;
     }
