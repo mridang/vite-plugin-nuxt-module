@@ -44,10 +44,10 @@ export function declarationFileOf(file: string): string {
  * `#app` / `#app/*` are aliases only a Nuxt build resolves: a shipped declaration naming them breaks `tsc` for every
  * consumer. `nuxt/app` re-exports them under a name any resolver finds (what `nuxt-module-build` rewrites them to).
  */
-export function rewriteRuntimeTypeAliases(code: string): string {
+export async function rewriteRuntimeTypeAliases(code: string): Promise<string> {
   return applyEdits(
     code,
-    specifierEdits(code, 'dts', (spec) =>
+    await specifierEdits(code, 'dts', (spec) =>
       /^#app(\/|$)/.test(spec) ? 'nuxt/app' : undefined,
     ),
   );
@@ -107,7 +107,7 @@ export async function emitRuntimeDeclarations(
   vues: readonly string[],
 ): Promise<void> {
   const out = join(o.outDir, RUNTIME_OUT_DIR);
-  const tsconfig = effectiveTsconfig(o.root, o.tsconfig);
+  const tsconfig = await effectiveTsconfig(o.root, o.tsconfig);
   const vue =
     vues.length > 0
       ? requiredVueTools(
@@ -163,8 +163,8 @@ export async function emitRuntimeDeclarations(
         throw new Error(`nuxtModule: no declaration was emitted for ${input}`);
       const dest = join(out, rel);
       await mkdir(dirname(dest), { recursive: true });
-      const code = rewriteRuntimeTypeAliases(
-        rewriteDeclarationImports(text, join(o.runtimeDir, rel), o.scope),
+      const code = await rewriteRuntimeTypeAliases(
+        await rewriteDeclarationImports(text, join(o.runtimeDir, rel), o.scope),
       );
       await writeFile(dest, code);
       shipped.push([dest, code]);

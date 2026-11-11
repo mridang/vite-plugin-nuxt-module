@@ -66,7 +66,7 @@ export async function selfReferenceOptions(
   tsconfig: string,
   entries: Readonly<Record<string, string>> = {},
 ): Promise<SelfReferenceOptions> {
-  const pkg = readPackageJson(root);
+  const pkg = await readPackageJson(root);
   if (!pkg.name || !pkg.exports || typeof pkg.exports !== 'object') return {};
   if (!(await importsItself(entryRoot, pkg.name))) return {};
   const map = Object.keys(pkg.exports).some((k) => k.startsWith('.'))

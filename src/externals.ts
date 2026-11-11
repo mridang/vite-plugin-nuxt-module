@@ -21,8 +21,10 @@ export function matchesAny(id: string, list: readonly Matcher[]): boolean {
 }
 
 /** Declared runtime dependency names of the package at `root` (not its devDependencies). */
-export function declaredDependencies(root: string): readonly string[] {
-  const pkg = readPackageJson(root);
+export async function declaredDependencies(
+  root: string,
+): Promise<readonly string[]> {
+  const pkg = await readPackageJson(root);
   return [
     ...Object.keys(pkg.dependencies ?? {}),
     ...Object.keys(pkg.peerDependencies ?? {}),
@@ -51,15 +53,16 @@ export interface ExternalsOptions {
  * package's own name (a self-import resolves to the published entry, never to a stale `dist`
  * inlined into the build), the extra `external` matchers, and the Node builtins.
  */
-export function moduleExternals(
+export async function moduleExternals(
   root: string,
   options: ExternalsOptions = {},
-): Matcher[] {
+): Promise<Matcher[]> {
   const { external = [], bundle = [] } = options;
-  const pkg = readPackageJson(root);
+  const pkg = await readPackageJson(root);
+  const dependencies = await declaredDependencies(root);
   const inlined = (name: string): boolean => matchesAny(name, bundle);
   return [
-    ...declaredDependencies(root)
+    ...dependencies
       .filter((d) => !inlined(d))
       .map((name) => packageMatcher(name)),
     ...(pkg.name && !inlined(pkg.name) ? [packageMatcher(pkg.name)] : []),

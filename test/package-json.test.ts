@@ -17,7 +17,8 @@ async function packageRoot(pkg: Record<string, unknown>): Promise<string> {
 
 describe('readPackageJson', () => {
   it("reads the package's manifest", async () => {
-    expect(readPackageJson(await packageRoot({ name: 'x' })).name).toBe('x');
+    const awaited1 = await readPackageJson(await packageRoot({ name: 'x' }));
+    expect(awaited1.name).toBe('x');
   });
 });
 
@@ -27,7 +28,7 @@ describe('isModulePackage', () => {
     [{ type: 'commonjs' }, false],
     [{}, false],
   ])('%j is a module package: %s', async (pkg, expected) => {
-    expect(isModulePackage(await packageRoot(pkg))).toBe(expected);
+    expect(await isModulePackage(await packageRoot(pkg))).toBe(expected);
   });
 });
 
@@ -47,7 +48,7 @@ describe('namesFile', () => {
     [{}, false],
   ])('%j names dist/types.d.mts: %s', async (pkg, expected) => {
     const root = await packageRoot(pkg);
-    expect(namesFile(root, nodePath.join(root, 'dist/types.d.mts'))).toBe(
+    expect(await namesFile(root, nodePath.join(root, 'dist/types.d.mts'))).toBe(
       expected,
     );
   });

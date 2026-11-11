@@ -116,7 +116,7 @@ describe('declarationRuntimeExternals', () => {
       ).resolveId as (
         id: string,
         importer: string,
-      ) => { id: string; external: boolean } | null
+      ) => Promise<{ id: string; external: boolean } | null>
     )(id, join(root, 'src/index.ts'));
 
   it.each([['./runtime/composables/use'], ['./runtime/composables/use.js']])(
@@ -126,7 +126,7 @@ describe('declarationRuntimeExternals', () => {
         'src/runtime/composables/use.ts': '',
         'src/index.ts': '',
       });
-      expect(resolveId(root, id)).toEqual({
+      expect(await resolveId(root, id)).toEqual({
         id: 'nuxt-module-runtime:composables/use.js',
         external: true,
       });
@@ -134,7 +134,7 @@ describe('declarationRuntimeExternals', () => {
   );
 
   it('keeps a package import external', async () => {
-    expect(resolveId(await moduleRoot({}), 'h3')).toEqual({
+    expect(await resolveId(await moduleRoot({}), 'h3')).toEqual({
       id: 'h3',
       external: true,
     });
@@ -146,18 +146,20 @@ describe('renderRuntimeSpecifiers', () => {
     ['index.mjs', './runtime/x.js'],
     ['utils/headers.mjs', '../runtime/x.js'],
     ['shared/a.b.mjs', '../runtime/x.js'],
-  ])('imports a runtime file from %s as %s', (fileName, expected) => {
-    expect(
-      renderRuntimeSpecifiers(
-        'import { x } from "nuxt-module-runtime:x.js";',
-        fileName,
-      )?.code,
-    ).toBe(`import { x } from "${expected}";`);
+  ])('imports a runtime file from %s as %s', async (fileName, expected) => {
+    const view = await renderRuntimeSpecifiers(
+      'import { x } from "nuxt-module-runtime:x.js";',
+      fileName,
+    );
+    expect(view?.code).toBe(`import { x } from "${expected}";`);
   });
 
-  it('leaves a chunk without runtime imports alone', () => {
+  it('leaves a chunk without runtime imports alone', async () => {
     expect(
-      renderRuntimeSpecifiers('import { x } from "./x.mjs";', 'index.mjs'),
+      await renderRuntimeSpecifiers(
+        'import { x } from "./x.mjs";',
+        'index.mjs',
+      ),
     ).toBeNull();
   });
 });
@@ -166,7 +168,7 @@ describe('runtimeImportTypes', () => {
   it("names the runtime file of an inferred import type, whatever the declaring file's directory", async () => {
     const root = await moduleRoot({ 'src/runtime/x.ts': '' });
     expect(
-      runtimeImportTypes(
+      await runtimeImportTypes(
         'export declare const a: () => import("../runtime/x").X;',
         join(root, 'src/deep/a.d.ts'),
         join(root, 'src/runtime'),

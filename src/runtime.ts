@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { RolldownMagicString, type RolldownPlugin } from 'rolldown';
@@ -10,6 +9,7 @@ import {
   RUNTIME_OUT_DIR,
   TEST_FILE_GLOBS,
 } from './defaults.js';
+import { exists } from './exists.js';
 import { matchesAnyGlob } from './glob.js';
 import { compileSass } from './sass.js';
 import { walk } from './walk.js';
@@ -38,14 +38,13 @@ const { dirname, join, posix, relative, resolve, sep } = path;
  * The module's runtime directory (absolute): the one given, which must exist, else `src/runtime`
  * when the module has one; `undefined` for `runtimeDir: false`.
  */
-export function moduleRuntimeDir(
+export async function moduleRuntimeDir(
   root: string,
   runtimeDir: string | false | undefined,
-): string | undefined {
+): Promise<string | undefined> {
   if (runtimeDir === false) return undefined;
   const dir = resolve(root, runtimeDir ?? NUXT_RUNTIME_DIR);
-  // eslint-disable-next-line n/no-sync -- moduleRuntimeDir is synchronous: config-time callers need the directory at once
-  if (existsSync(dir)) return dir;
+  if (await exists(dir)) return dir;
   if (runtimeDir !== undefined)
     throw new Error(`nuxtModule: runtime directory ${runtimeDir} not found`);
   return undefined;
@@ -113,11 +112,11 @@ function runtimeSpecifier(runtimeDir: string, file: string): string {
 }
 
 /** The runtime source file a relative specifier written in `importer` names, if it lies in `runtimeDir`. */
-function runtimeSource(
+async function runtimeSource(
   runtimeDir: string,
   id: string,
   importer: string,
-): string | undefined {
+): Promise<string | undefined> {
   if (!/^\.\.?\//.test(id)) return undefined;
   const target = resolve(dirname(importer), id);
   if (!target.startsWith(runtimeDir + sep)) return undefined;
@@ -129,13 +128,13 @@ function runtimeSource(
  * specifier made the path of its runtime file relative to the chunk (`./runtime/x.js` from
  * `index.mjs`, `../runtime/x.js` from `utils/headers.mjs` or `shared/x.mjs`), edited with a map.
  */
-export function renderRuntimeSpecifiers(
+export async function renderRuntimeSpecifiers(
   code: string,
   fileName: string,
-): { code: string; map: string } | null {
+): Promise<{ code: string; map: string } | null> {
   if (!code.includes(RUNTIME_SPECIFIER)) return null;
   const lang = DECLARATION_RE.test(fileName) ? 'dts' : 'js';
-  const edits = specifierEdits(code, lang, (specifier) => {
+  const edits = await specifierEdits(code, lang, (specifier) => {
     if (!specifier.startsWith(RUNTIME_SPECIFIER)) return undefined;
     const file = specifier.slice(RUNTIME_SPECIFIER.length);
     const path = posix.relative(
@@ -160,9 +159,9 @@ export function renderRuntimeSpecifiers(
  */
 function runtimeImports(runtimeDir: string) {
   return {
-    resolveId(id: string, importer?: string) {
+    async resolveId(id: string, importer?: string) {
       if (id.startsWith(RUNTIME_SPECIFIER)) return { id, external: true };
-      const file = importer && runtimeSource(runtimeDir, id, importer);
+      const file = importer && (await runtimeSource(runtimeDir, id, importer));
       return file
         ? { id: runtimeSpecifier(runtimeDir, file), external: true }
         : null;
@@ -174,7 +173,7 @@ function runtimeImports(runtimeDir: string) {
 /** Renders the stand-in specifiers of a chunk. After every other plugin's: the declaration bundler puts the import types back when it renders. */
 const renderRuntimeImports = {
   order: 'post' as const,
-  handler: (code: string, chunk: { readonly fileName: string }) =>
+  handler: async (code: string, chunk: { readonly fileName: string }) =>
     renderRuntimeSpecifiers(code, chunk.fileName),
 };
 
@@ -213,15 +212,15 @@ export function nuxtRuntimeExternals(
  * type that names a runtime file made the stand-in specifier: the declaration bundler keeps the
  * specifier of an external import type as written, relative to the source file.
  */
-export function runtimeImportTypes(
+export async function runtimeImportTypes(
   code: string,
   importer: string,
   runtimeDir: string,
-): string {
+): Promise<string> {
   return applyEdits(
     code,
-    specifierEdits(code, 'dts', (specifier) => {
-      const file = runtimeSource(runtimeDir, specifier, importer);
+    await specifierEdits(code, 'dts', async (specifier) => {
+      const file = await runtimeSource(runtimeDir, specifier, importer);
       return file ? runtimeSpecifier(runtimeDir, file) : undefined;
     }),
   );
@@ -238,7 +237,7 @@ export function declarationRuntimeExternals(
   const imports = runtimeImports(runtimeDir);
   return {
     name: `${PLUGIN_PREFIX}:dts-runtime-externals`,
-    resolveId(id: string, importer?: string) {
+    async resolveId(id: string, importer?: string) {
       // Like rollup-plugin-dts' default: types of any package (declared or not) are imported, never inlined.
       const isBare =
         !/^\.\.?(\/|$)/.test(id) && !id.startsWith('/') && !id.startsWith('\0');
@@ -248,10 +247,10 @@ export function declarationRuntimeExternals(
     },
     transform: {
       order: 'pre',
-      handler(code: string, id: string) {
+      async handler(code: string, id: string) {
         if (!/\.d\.[cm]?ts$/.test(id) || !code.includes('import(')) return null;
         // The declaration of `src/x.ts` is the module `src/x.d.ts`: its import types are relative to it.
-        const next = runtimeImportTypes(code, id, runtimeDir);
+        const next = await runtimeImportTypes(code, id, runtimeDir);
         return next === code ? null : { code: next };
       },
     },
@@ -275,7 +274,7 @@ export async function buildRuntime(o: RuntimeOptions): Promise<void> {
   await rm(out, { recursive: true, force: true });
   const scripts: string[] = [];
   // The module's own tsconfig (its chain checked), so oxc honours what it sets: `useDefineForClassFields`, JSX.
-  const tsconfig = optionalTsconfig(o.root, o.tsconfig, o.dts);
+  const tsconfig = await optionalTsconfig(o.root, o.tsconfig, o.dts);
   for (const rel of files) {
     const from = join(o.runtimeDir, rel);
     const dest = join(out, runtimeOutName(rel));
@@ -283,8 +282,12 @@ export async function buildRuntime(o: RuntimeOptions): Promise<void> {
     if (DECLARATION_RE.test(rel)) {
       await writeFile(
         dest,
-        rewriteRuntimeTypeAliases(
-          rewriteDeclarationImports(await readFile(from, 'utf8'), from, scope),
+        await rewriteRuntimeTypeAliases(
+          await rewriteDeclarationImports(
+            await readFile(from, 'utf8'),
+            from,
+            scope,
+          ),
         ),
       );
     } else if (SCRIPT_RE.test(rel)) {
@@ -301,7 +304,7 @@ export async function buildRuntime(o: RuntimeOptions): Promise<void> {
             },
           })
         : { code: source };
-      await writeFile(dest, rewriteImports(code, from, scope));
+      await writeFile(dest, await rewriteImports(code, from, scope));
       scripts.push(from);
     } else if (SASS_RE.test(rel)) {
       await writeFile(dest, await compileSass(o.root, from, false));

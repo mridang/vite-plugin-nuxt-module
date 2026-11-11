@@ -23,9 +23,9 @@ describe('declarationFileOf', () => {
 });
 
 describe('rewriteRuntimeTypeAliases', () => {
-  it('names #app and its subpaths nuxt/app, in imports and import types', () => {
+  it('names #app and its subpaths nuxt/app, in imports and import types', async () => {
     expect(
-      rewriteRuntimeTypeAliases(
+      await rewriteRuntimeTypeAliases(
         'import { a } from "#app";\nimport type { b } from \'#app/composables\';\ntype C = import("#app/nuxt").C;\nimport { d } from "#imports";\n',
       ),
     ).toBe(

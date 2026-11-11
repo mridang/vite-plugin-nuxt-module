@@ -32,13 +32,15 @@ export function implicitDependencies(options: () => ResolvedOptions): Plugin {
       reported.clear();
     },
     // Every module the bundle inlines is loaded; externals never are.
-    load(id) {
+    async load(id) {
       const name = nodeModulesPackage(id);
       if (!name || reported.has(name)) return;
       const { root, bundle } = options();
-      if (matchesAny(name, bundle) || name === readPackageJson(root).name)
-        return;
+      if (matchesAny(name, bundle)) return;
+      // Marked before the manifest is read, so concurrent loads of one package warn once.
       reported.add(name);
+      const pkg = await readPackageJson(root);
+      if (name === pkg.name) return;
       // eslint-disable-next-line unicorn/no-this-outside-of-class -- Rollup plugin hooks receive their context (this.warn) as `this`
       this.warn({
         code: IMPLICIT_DEPENDENCY,

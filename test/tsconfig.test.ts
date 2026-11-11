@@ -92,7 +92,10 @@ describe('packageTsconfig', () => {
       'tsconfig.lib.json': '{}',
     });
     const without = await tree({ 'tsconfig.json': '{}' });
-    expect([packageTsconfig(withLib), packageTsconfig(without)]).toEqual([
+    expect([
+      await packageTsconfig(withLib),
+      await packageTsconfig(without),
+    ]).toEqual([
       join(withLib, 'tsconfig.lib.json'),
       join(without, 'tsconfig.json'),
     ]);
@@ -103,14 +106,14 @@ describe('packageTsconfig', () => {
       'tsconfig.json': '{}',
       'packages/x/package.json': '{}',
     });
-    expect(packageTsconfig(join(root, 'packages/x'))).toBe(
+    expect(await packageTsconfig(join(root, 'packages/x'))).toBe(
       join(root, 'tsconfig.json'),
     );
   });
 
   it('takes a named tsconfig as it is, without looking further', async () => {
     const root = await tree({ 'tsconfig.json': '{}' });
-    expect(packageTsconfig(root, 'tsconfig.build.json')).toBe(
+    expect(await packageTsconfig(root, 'tsconfig.build.json')).toBe(
       join(root, 'tsconfig.build.json'),
     );
   });

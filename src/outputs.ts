@@ -135,7 +135,7 @@ export function nuxtModuleOutputs(options: () => ResolvedOptions): Plugin {
     const o = options();
     const outDir = path.resolve(config.root, config.build.outDir);
     if (o.dts) {
-      const tsconfig = effectiveTsconfig(o.root, o.tsconfig);
+      const tsconfig = await effectiveTsconfig(o.root, o.tsconfig);
       await emitBundledTypes({
         root: o.root,
         entry: o.entry,

@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { UserConfig } from 'vite';
 
@@ -11,6 +10,7 @@ import {
   SOURCE_ROOT,
 } from './defaults.js';
 import { type EntryOption, namedEntries, resolvedEntries } from './entries.js';
+import { exists } from './exists.js';
 import { type Matcher, moduleExternals } from './externals.js';
 import { isModulePackage } from './package-json.js';
 import { moduleRuntimeDir } from './runtime.js';
@@ -115,28 +115,27 @@ export interface ResolvedOptions {
  * Validates `options` and fills in every default, for the project at `root`. Fails on an option
  * the build could not honour, naming it, before anything is built.
  */
-export function resolveOptions(
+export async function resolveOptions(
   options: NuxtModuleOptions,
   root: string,
   userConfig: Pick<UserConfig, 'build'> = {},
-): ResolvedOptions {
+): Promise<ResolvedOptions> {
   const extension = options.extension ?? NUXT_EXTENSION;
   if (!NUXT_EXTENSIONS.includes(extension))
     throw new Error(
       `nuxtModule: extension ${extension} is not one of ${NUXT_EXTENSIONS.join(', ')}`,
     );
   // Node loads `.js` as ESM only in a module package; elsewhere `module.json`'s import of the module would fail.
-  if (extension === '.js' && !isModulePackage(root))
+  if (extension === '.js' && !(await isModulePackage(root)))
     throw new Error(
       'nuxtModule: extension .js writes ESM, which Node loads as CommonJS outside a "type": "module" package; use .mjs',
     );
   const moduleFile = options.module ?? NUXT_MODULE_ENTRY;
-  // eslint-disable-next-line n/no-sync -- resolveOptions is synchronous and tested as such; an async existence check would ripple into it
-  if (!existsSync(path.resolve(root, moduleFile)))
+  if (!(await exists(path.resolve(root, moduleFile))))
     throw new Error(
       `nuxtModule: no module to build: ${moduleFile} does not exist; set \`module\``,
     );
-  const runtimeDir = moduleRuntimeDir(root, options.runtimeDir);
+  const runtimeDir = await moduleRuntimeDir(root, options.runtimeDir);
   const entry = resolvedEntries(
     {
       module: moduleFile,
@@ -160,7 +159,7 @@ export function resolveOptions(
     entry,
     runtimeDir,
     runtimeExclude: options.runtimeExclude ?? [],
-    external: [...NUXT_EXTERNALS, ...moduleExternals(root, options)],
+    external: [...NUXT_EXTERNALS, ...(await moduleExternals(root, options))],
     bundle: options.bundle ?? [],
     extension,
     target: options.target,

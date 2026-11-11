@@ -25,7 +25,7 @@ describe('declaredDependencies', () => {
       optionalDependencies: { c: '1' },
       devDependencies: { d: '1' },
     });
-    expect(declaredDependencies(root)).toEqual(['a', 'b', 'c']);
+    expect(await declaredDependencies(root)).toEqual(['a', 'b', 'c']);
   });
 });
 
@@ -66,8 +66,8 @@ describe('moduleExternals', () => {
     });
   });
 
-  it('lists the declared dependencies, the package itself, the extra matchers, then the builtins', () => {
-    const list = moduleExternals(root, { external: ['extra'] });
+  it('lists the declared dependencies, the package itself, the extra matchers, then the builtins', async () => {
+    const list = await moduleExternals(root, { external: ['extra'] });
     expect([
       String(list[0]),
       String(list[1]),
@@ -83,29 +83,34 @@ describe('moduleExternals', () => {
     ]);
   });
 
-  it('leaves out a declared dependency listed in bundle', () => {
+  it('leaves out a declared dependency listed in bundle', async () => {
     expect(
-      matchesAny('lit', moduleExternals(root, { bundle: [/^lit$/] })),
+      matchesAny('lit', await moduleExternals(root, { bundle: [/^lit$/] })),
     ).toBe(false);
   });
 
-  it("keeps a self-import external so it never inlines a previous build's output", () => {
-    expect(matchesAny('self-pkg/plain', moduleExternals(root))).toBe(true);
+  it("keeps a self-import external so it never inlines a previous build's output", async () => {
+    expect(matchesAny('self-pkg/plain', await moduleExternals(root))).toBe(
+      true,
+    );
   });
 
-  it('inlines a self-import listed in bundle', () => {
+  it('inlines a self-import listed in bundle', async () => {
     expect(
-      matchesAny('self-pkg/plain', moduleExternals(root, { bundle: [/.*/] })),
+      matchesAny(
+        'self-pkg/plain',
+        await moduleExternals(root, { bundle: [/.*/] }),
+      ),
     ).toBe(false);
   });
 
-  it('keeps the unprefixed builtins external', () => {
-    expect(matchesAny('fs/promises', moduleExternals(root))).toBe(true);
+  it('keeps the unprefixed builtins external', async () => {
+    expect(matchesAny('fs/promises', await moduleExternals(root))).toBe(true);
   });
 
-  it('keeps builtins external whatever bundle says', () => {
+  it('keeps builtins external whatever bundle says', async () => {
     expect(
-      matchesAny('events', moduleExternals(root, { bundle: [/.*/] })),
+      matchesAny('events', await moduleExternals(root, { bundle: [/.*/] })),
     ).toBe(true);
   });
 });

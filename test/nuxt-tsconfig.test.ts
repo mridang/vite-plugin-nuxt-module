@@ -20,7 +20,7 @@ describe('missingTsconfigFile', () => {
       'base.json': '{}',
     });
     expect(
-      missingTsconfigFile(ts, nodePath.join(root, 'tsconfig.json')),
+      await missingTsconfigFile(ts, nodePath.join(root, 'tsconfig.json')),
     ).toBeUndefined();
   });
 
@@ -28,9 +28,9 @@ describe('missingTsconfigFile', () => {
     const root = await tree({
       'tsconfig.json': '{ "extends": "./.nuxt/tsconfig.json" }',
     });
-    expect(missingTsconfigFile(ts, nodePath.join(root, 'tsconfig.json'))).toBe(
-      nodePath.join(root, '.nuxt/tsconfig.json'),
-    );
+    expect(
+      await missingTsconfigFile(ts, nodePath.join(root, 'tsconfig.json')),
+    ).toBe(nodePath.join(root, '.nuxt/tsconfig.json'));
   });
 
   it('reads the generated tsconfig of a prepared module, whose paths hold `/*`', async () => {
@@ -40,7 +40,7 @@ describe('missingTsconfigFile', () => {
         '{ "compilerOptions": { "paths": { "~/*": ["../*"] } }, /* generated */ "include": ["../src"] }',
     });
     expect(
-      missingTsconfigFile(ts, nodePath.join(root, 'tsconfig.json')),
+      await missingTsconfigFile(ts, nodePath.join(root, 'tsconfig.json')),
     ).toBeUndefined();
   });
 
@@ -50,22 +50,22 @@ describe('missingTsconfigFile', () => {
       'base.json': '{}',
     });
     expect(
-      missingTsconfigFile(ts, nodePath.join(root, 'tsconfig.json')),
+      await missingTsconfigFile(ts, nodePath.join(root, 'tsconfig.json')),
     ).toBeUndefined();
   });
 
   it('names a file that cannot be read as a tsconfig', async () => {
     const root = await tree({ 'tsconfig.json': '{ "extends": ' });
-    expect(() =>
+    await expect(
       missingTsconfigFile(ts, nodePath.join(root, 'tsconfig.json')),
-    ).toThrow(/cannot read/);
+    ).rejects.toThrow(/cannot read/);
   });
 });
 
 describe('effectiveTsconfig', () => {
   it('uses a config whose chain is complete as it is', async () => {
     const root = await tree({ 'tsconfig.json': '{}', 'package.json': '{}' });
-    expect(effectiveTsconfig(root, undefined)).toBe(
+    expect(await effectiveTsconfig(root, undefined)).toBe(
       nodePath.join(root, 'tsconfig.json'),
     );
   });
@@ -76,7 +76,7 @@ describe('effectiveTsconfig', () => {
         '{ "compilerOptions": { "paths": { "@/*": ["./src/*"] }, }, "include": ["src/**/*.ts"], }',
       'package.json': '{}',
     });
-    expect(effectiveTsconfig(root, undefined)).toBe(
+    expect(await effectiveTsconfig(root, undefined)).toBe(
       nodePath.join(root, 'tsconfig.json'),
     );
   });
@@ -86,7 +86,9 @@ describe('effectiveTsconfig', () => {
       'tsconfig.json': '{ "extends": "./.nuxt/tsconfig.json" }',
       'package.json': '{}',
     });
-    expect(() => effectiveTsconfig(root, undefined)).toThrow(/nuxi prepare/);
+    await expect(effectiveTsconfig(root, undefined)).rejects.toThrow(
+      /nuxi prepare/,
+    );
   });
 
   it('fails on any other broken chain instead of guessing options', async () => {
@@ -94,7 +96,7 @@ describe('effectiveTsconfig', () => {
       'tsconfig.json': '{ "extends": "./base.json" }',
       'package.json': '{}',
     });
-    expect(() => effectiveTsconfig(root, undefined)).toThrow(
+    await expect(effectiveTsconfig(root, undefined)).rejects.toThrow(
       /base\.json, which does not exist/,
     );
   });
@@ -104,14 +106,18 @@ describe('optionalTsconfig', () => {
   it('needs no tsconfig for a module that writes no declarations', async () => {
     const root = await tree({ 'package.json': '{}' });
     expect(
-      optionalTsconfig(nodePath.join(root, 'x'), 'tsconfig.build.json', false),
+      await optionalTsconfig(
+        nodePath.join(root, 'x'),
+        'tsconfig.build.json',
+        false,
+      ),
     ).toBeUndefined();
   });
 
   it('fails without a tsconfig when one is required', async () => {
     const root = await tree({ 'package.json': '{}' });
-    expect(() => optionalTsconfig(root, 'tsconfig.build.json', true)).toThrow(
-      /tsconfig\.build\.json, which does not exist/,
-    );
+    await expect(
+      optionalTsconfig(root, 'tsconfig.build.json', true),
+    ).rejects.toThrow(/tsconfig\.build\.json, which does not exist/);
   });
 });

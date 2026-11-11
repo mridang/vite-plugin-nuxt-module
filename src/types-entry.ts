@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { parseSync } from 'vite';
+import { parse } from 'vite';
 
 import { exists } from './exists.js';
 import { namesFile } from './package-json.js';
@@ -33,12 +33,11 @@ interface Reexport {
 }
 
 /** The module declaration's exports: every name, and each export statement to re-export. */
-function scanExports(declaration: string): {
+async function scanExports(declaration: string): Promise<{
   names: Set<string>;
   reexports: Reexport[];
-} {
-  // eslint-disable-next-line n/no-sync -- parseSync is the synchronous parser vite's deprecation notice names; the scan runs sync
-  const { program } = parseSync('module.ts', declaration, { lang: 'ts' });
+}> {
+  const { program } = await parse('module.ts', declaration, { lang: 'ts' });
   const statements: unknown = program.body;
   const names = new Set<string>();
   const reexports: Reexport[] = [];
@@ -105,8 +104,11 @@ const HOOKS: readonly {
  * `declaration` and whose entry is `moduleFile` (`./module.mjs`): the module's public types plus
  * `#app` / `@nuxt/schema` hooks and runtime config shims.
  */
-export function typesEntry(declaration: string, moduleFile: string): string {
-  const { names, reexports } = scanExports(declaration);
+export async function typesEntry(
+  declaration: string,
+  moduleFile: string,
+): Promise<string> {
+  const { names, reexports } = await scanExports(declaration);
   const schemaImports: string[] = [];
   const moduleImports: string[] = [];
   const appShims: string[] = [];
@@ -159,10 +161,10 @@ export async function writeTypesEntry(
   const mjs = extension === '.mjs';
   // Paired with the module's own declaration extension: `module.mjs` → `types.d.mts`, `module.js` → `types.d.ts`.
   const file = join(outDir, mjs ? 'types.d.mts' : 'types.d.ts');
-  if ((await exists(file)) || !namesFile(root, file)) return;
+  if ((await exists(file)) || !(await namesFile(root, file))) return;
   const declaration = await readFile(
     join(outDir, mjs ? 'module.d.mts' : 'module.d.ts'),
     'utf8',
   );
-  await writeFile(file, typesEntry(declaration, `./module${extension}`));
+  await writeFile(file, await typesEntry(declaration, `./module${extension}`));
 }

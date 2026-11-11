@@ -207,11 +207,10 @@ describe('the Vite config the plugin adds', () => {
 
   it('describes the same build whoever calls it', async () => {
     const root = await packageRoot();
-    const o = resolveOptions({}, root);
+    const o = await resolveOptions({}, root);
     const logger = {} as Logger;
-    expect(
-      buildConfig(o, {}, logger, { failed: false }).build?.rolldownOptions?.cwd,
-    ).toBe(root);
+    const awaited1 = await buildConfig(o, {}, logger, { failed: false });
+    expect(awaited1.build?.rolldownOptions?.cwd).toBe(root);
   });
 });
 
