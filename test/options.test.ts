@@ -6,6 +6,14 @@ import { describe, expect, it } from '@jest/globals';
 import { matchesAny } from '../src/externals.js';
 import { resolveOptions } from '../src/options.js';
 
+const MODULE_MISSING_PATTERN =
+  /no module to build: src\/module\.ts does not exist/;
+const RUNTIME_PLUGIN_PATTERN =
+  /src\/runtime\/plugin\.ts lie in the runtime directory/;
+const TYPE_MODULE_PATTERN = /"type": "module"/;
+const MISSING_RUNTIME_DIRECTORY_PATTERN =
+  /runtime directory src\/missing not found/;
+
 const DEFAULT_FILES: Record<string, string> = { 'src/module.ts': '' };
 const DEFAULT_PACKAGE: Record<string, unknown> = {
   name: 'mod',
@@ -84,7 +92,7 @@ describe('resolveOptions', () => {
   it('fails without a module file to build', async () => {
     const root = await packageRoot({});
     await expect(resolveOptions({}, root)).rejects.toThrow(
-      /no module to build: src\/module\.ts does not exist/,
+      MODULE_MISSING_PATTERN,
     );
   });
 
@@ -95,16 +103,16 @@ describe('resolveOptions', () => {
         { entry: { 'runtime/plugin': 'src/runtime/plugin.ts' } },
         root,
       ),
-    ).rejects.toThrow(/src\/runtime\/plugin\.ts lie in the runtime directory/);
+    ).rejects.toThrow(RUNTIME_PLUGIN_PATTERN);
   });
 
   it.each([['.cjs'], ['.jsx']])(
     'refuses the extension %s, which Node cannot import as ESM',
-    async (ext) => {
+    async (extension) => {
       const root = await packageRoot();
       await expect(
-        resolveOptions({ extension: ext as '.mjs' }, root),
-      ).rejects.toThrow(`extension ${ext} is not one of .mjs, .js`);
+        resolveOptions({ extension: extension as '.mjs' }, root),
+      ).rejects.toThrow(`extension ${extension} is not one of .mjs, .js`);
     },
   );
 
@@ -114,7 +122,7 @@ describe('resolveOptions', () => {
       type: 'commonjs',
     });
     await expect(resolveOptions({ extension: '.js' }, root)).rejects.toThrow(
-      /"type": "module"/,
+      TYPE_MODULE_PATTERN,
     );
   });
 
@@ -130,7 +138,7 @@ describe('resolveOptions', () => {
     const root = await packageRoot();
     await expect(
       resolveOptions({ runtimeDir: 'src/missing' }, root),
-    ).rejects.toThrow(/runtime directory src\/missing not found/);
+    ).rejects.toThrow(MISSING_RUNTIME_DIRECTORY_PATTERN);
   });
 
   it('has no runtime for a module without one', async () => {

@@ -6,6 +6,8 @@ import type TypeScript from 'typescript';
 
 import { exists } from './exists.js';
 
+const PACKAGE_SPECIFIER_PATTERN = /^((?:@[^/]+\/)?[^/]+)(\/.*)?$/;
+
 const { dirname, join, resolve } = path;
 
 /** A `require` that resolves like code inside the package at `root`. */
@@ -22,7 +24,7 @@ export function packageSpecifier(specifier: string): {
   subpath: string;
 } {
   const [, name = specifier, sub = ''] =
-    /^((?:@[^/]+\/)?[^/]+)(\/.*)?$/.exec(specifier) ?? [];
+    PACKAGE_SPECIFIER_PATTERN.exec(specifier) ?? [];
   return { name, subpath: `.${sub}` };
 }
 
@@ -104,7 +106,7 @@ export async function packageDirectory(
   const present = await Promise.all(
     candidates.map((candidate) => exists(join(candidate, 'package.json'))),
   );
-  return candidates.find((_, i) => present[i]);
+  return candidates.find((_, index) => present[index]);
 }
 
 /**

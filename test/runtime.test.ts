@@ -18,6 +18,12 @@ import {
 } from '../src/runtime.js';
 import { pathExists } from './utils/fs.js';
 
+const RUNTIME_X_IMPORT_PATTERN = /from ["']\.\.\/runtime\/x\.js["']/;
+const COUNT_STATEMENT_PATTERN = /^[ \t]*count;$/m;
+const NUXI_PREPARE_PATTERN = /nuxi prepare/;
+const CANNOT_EMIT_DECLARATIONS_PATTERN =
+  /cannot emit declarations for the runtime/;
+
 const { join } = nodePath;
 
 /** A module root with `files` under it and a fake Sass that wraps the source in a comment. */
@@ -231,7 +237,7 @@ describe('runtime imports of bundled entries', () => {
       await output(out, 'utils/a.d.mts'),
     ]).toEqual([
       expect.stringContaining('import("./runtime/x.js").X'),
-      expect.stringMatching(/from ["']\.\.\/runtime\/x\.js["']/),
+      expect.stringMatching(RUNTIME_X_IMPORT_PATTERN),
     ]);
   }, 60_000);
 });
@@ -306,7 +312,7 @@ describe('buildRuntime of a prepared module', () => {
         'export class Counter {\n  count!: number;\n}\n',
     });
     await buildPrepared(root);
-    expect(await built(root, 'counter.js')).toMatch(/^[ \t]*count;$/m);
+    expect(await built(root, 'counter.js')).toMatch(COUNT_STATEMENT_PATTERN);
   });
 
   it('drops a declared class field when the tsconfig turns useDefineForClassFields off', async () => {
@@ -318,7 +324,9 @@ describe('buildRuntime of a prepared module', () => {
         'export class Counter {\n  count!: number;\n}\n',
     });
     await buildPrepared(root);
-    expect(await built(root, 'counter.js')).not.toMatch(/^[ \t]*count;$/m);
+    expect(await built(root, 'counter.js')).not.toMatch(
+      COUNT_STATEMENT_PATTERN,
+    );
   });
 
   it('fails when the module was not prepared, instead of guessing its compiler options', async () => {
@@ -326,7 +334,7 @@ describe('buildRuntime of a prepared module', () => {
       'tsconfig.json': prepared['tsconfig.json'],
       'src/runtime/counter.ts': 'export class Counter {}\n',
     });
-    await expect(buildPrepared(root)).rejects.toThrow(/nuxi prepare/);
+    await expect(buildPrepared(root)).rejects.toThrow(NUXI_PREPARE_PATTERN);
   });
 
   it("compiles a runtime stylesheet to CSS with the module's own Sass", async () => {
@@ -400,7 +408,7 @@ describe('buildRuntime of a prepared module', () => {
         'export const make = () => class {\n  private secret = 1;\n};\n',
     });
     await expect(buildPrepared(root, true)).rejects.toThrow(
-      /cannot emit declarations for the runtime/,
+      CANNOT_EMIT_DECLARATIONS_PATTERN,
     );
   });
 

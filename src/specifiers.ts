@@ -2,6 +2,15 @@ import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { parse } from 'vite';
 
+const TS_JSX_EXTENSION_PATTERN = /\.(ts|tsx|jsx)$/;
+const MTS_EXTENSION_PATTERN = /\.mts$/;
+const CTS_EXTENSION_PATTERN = /\.cts$/;
+const JS_EXTENSION_PATTERN = /\.[cm]?js$/;
+const RELATIVE_OR_ROOT_SPECIFIER_PATTERN = /^\.\.?(\/|$)/;
+const QUERY_OR_HASH_CHARACTER_PATTERN = /[?#]/;
+const TS_SOURCE_EXTENSION_PATTERN = /\.(?:ts|tsx|jsx|mts|cts)$/;
+const QUOTE_OR_BACKSLASH_PATTERN = /['"\\]/;
+
 const { basename, dirname, extname, join, posix, relative, resolve, sep } =
   path;
 
@@ -35,9 +44,9 @@ export const isSassPartial = (file: string): boolean =>
 export function runtimeOutName(file: string): string {
   if (DECLARATION_RE.test(file)) return file;
   return file
-    .replace(/\.(ts|tsx|jsx)$/, '.js')
-    .replace(/\.mts$/, '.mjs')
-    .replace(/\.cts$/, '.cjs')
+    .replace(TS_JSX_EXTENSION_PATTERN, '.js')
+    .replace(MTS_EXTENSION_PATTERN, '.mjs')
+    .replace(CTS_EXTENSION_PATTERN, '.cjs')
     .replace(SASS_RE, '.css');
 }
 
@@ -62,7 +71,7 @@ async function firstFile(
   files: readonly string[],
 ): Promise<string | undefined> {
   const found = await Promise.all(files.map((file) => isFile(file)));
-  return files.find((_, i) => found[i]);
+  return files.find((_, index) => found[index]);
 }
 
 /** TypeScript extensions a `.js` specifier can stand for (TS NodeNext style: `./x.js` for `x.ts`). */
@@ -77,15 +86,17 @@ export async function sourceFileOf(
   target: string,
 ): Promise<string | undefined> {
   if (await isFile(target)) return target;
-  if (/\.[cm]?js$/.test(target)) {
+  if (JS_EXTENSION_PATTERN.test(target)) {
     const found = await firstFile(
-      TS_EXTS.map((ts) => target.replace(/\.[cm]?js$/, ts)),
+      TS_EXTS.map((ts) => target.replace(JS_EXTENSION_PATTERN, ts)),
     );
     if (found) return found;
   }
   return (
-    (await firstFile(SOURCE_EXTS.map((e) => target + e))) ??
-    (await firstFile(SOURCE_EXTS.map((e) => join(target, `index${e}`))))
+    (await firstFile(SOURCE_EXTS.map((extension) => target + extension))) ??
+    (await firstFile(
+      SOURCE_EXTS.map((extension) => join(target, `index${extension}`)),
+    ))
   );
 }
 
@@ -101,13 +112,14 @@ export async function rewriteSpecifier(
   fromFile: string,
   scope?: SpecifierScope,
 ): Promise<string> {
-  if (!/^\.\.?(\/|$)/.test(spec)) return spec;
-  const queryAt = spec.search(/[?#]/);
+  if (!RELATIVE_OR_ROOT_SPECIFIER_PATTERN.test(spec)) return spec;
+  const queryAt = spec.search(QUERY_OR_HASH_CHARACTER_PATTERN);
   const suffix = queryAt < 0 ? '' : spec.slice(queryAt);
   const bare = suffix ? spec.slice(0, -suffix.length) : spec;
   const target = resolve(dirname(fromFile), bare);
-  const specifierOf = (rel: string): string =>
-    (rel.startsWith('.') ? rel : `./${rel}`) + suffix;
+  const specifierOf = (relativePath: string): string =>
+    (relativePath.startsWith('.') ? relativePath : `./${relativePath}`) +
+    suffix;
   const inside = (p: string) => !scope || p.startsWith(scope.runtimeDir + sep);
   const located = (p: string): string => {
     if (!scope || inside(p))
@@ -128,7 +140,7 @@ export async function rewriteSpecifier(
   if (explicit && (await isFile(target))) {
     // A Sass import names the stylesheet the runtime build compiles it to (`./theme.scss` → `./theme.css`).
     const isSourceImport =
-      /\.(?:ts|tsx|jsx|mts|cts)$/.test(explicit) && !DECLARATION_RE.test(bare);
+      TS_SOURCE_EXTENSION_PATTERN.test(explicit) && !DECLARATION_RE.test(bare);
     const isSassImport =
       SASS_RE.test(explicit) && inside(target) && !isSassPartial(target);
     return isSourceImport || isSassImport ? located(target) : spec;
@@ -136,7 +148,7 @@ export async function rewriteSpecifier(
   const source = await sourceFileOf(target);
   if (!source) return spec;
   // `./x.js` written for a runtime `x.ts` already names the file built per file.
-  if (/\.[cm]?js$/.test(explicit) && inside(source)) return spec;
+  if (JS_EXTENSION_PATTERN.test(explicit) && inside(source)) return spec;
   return located(source);
 }
 
@@ -168,7 +180,8 @@ export interface Edit {
 /** How a specifier is written in the source text: the quote it had is kept. */
 function quoted(original: string, specifier: string): string {
   const quote = original.slice(0, 1);
-  return (quote === "'" || quote === '"') && !/['"\\]/.test(specifier)
+  return (quote === "'" || quote === '"') &&
+    !QUOTE_OR_BACKSLASH_PATTERN.test(specifier)
     ? `${quote}${specifier}${quote}`
     : JSON.stringify(specifier);
 }
@@ -209,8 +222,8 @@ export async function specifierEdits(
   };
   visit(program.body);
   const mapped = await Promise.all(found.map((item) => map(item.value)));
-  return found.flatMap((item, i) => {
-    const next = mapped[i];
+  return found.flatMap((item, index) => {
+    const next = mapped[index];
     return next !== undefined && next !== item.value
       ? [
           {
@@ -227,7 +240,10 @@ export async function specifierEdits(
 export function applyEdits(code: string, edits: readonly Edit[]): string {
   return [...edits]
     .toSorted((a, b) => b.start - a.start)
-    .reduce((c, e) => c.slice(0, e.start) + e.text + c.slice(e.end), code);
+    .reduce(
+      (c, edit) => c.slice(0, edit.start) + edit.text + c.slice(edit.end),
+      code,
+    );
 }
 
 /** Rewrites every static / dynamic import and re-export specifier of a transpiled JS module. */

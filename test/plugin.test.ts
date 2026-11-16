@@ -22,6 +22,15 @@ import { buildConfig } from '../src/plugin.js';
 import { resolveOptions } from '../src/options.js';
 import { pathExists } from './utils/fs.js';
 
+const collator = new Intl.Collator();
+
+const PREPARE_TRUE_PATTERN = /prepare: true/;
+const LATE_WARNING_PATTERN = /late warning/;
+const HELPER_IMPORT_PATTERN = /["']\.\.\/lib\/helper\.js["']/;
+const USE_THING_IMPORT_PATTERN =
+  /from ["']\.\/runtime\/composables\/useThing\.js["']/;
+const TYPE_ERROR_PATTERN = /type error/;
+
 /** A fake `@nuxt/cli` whose prepare writes the `.nuxt/tsconfig.json` a real one would. */
 const fakeNuxtCli = {
   'node_modules/@nuxt/cli/package.json': JSON.stringify({
@@ -183,7 +192,7 @@ describe('the Vite config the plugin adds', () => {
       'src/module.ts': '',
       'tsconfig.json': '{ "extends": "./.nuxt/tsconfig.json" }',
     });
-    await expect(configFor(root)).rejects.toThrow(/prepare: true/);
+    await expect(configFor(root)).rejects.toThrow(PREPARE_TRUE_PATTERN);
   });
 
   it('prepares the module first when prepare is set', async () => {
@@ -240,15 +249,15 @@ describe('nuxtModule builds', () => {
   it('writes what @nuxt/module-builder writes', async () => {
     const root = await fixture(files);
     await buildFixture(root, { entry });
-    const dist = await readdir(nodePath.join(root, 'dist'));
+    const distribution = await readdir(nodePath.join(root, 'dist'));
     const composables = await readdir(
       nodePath.join(root, 'dist/runtime/composables'),
     );
     expect([
-      dist
+      distribution
         .filter((f) => !f.endsWith('.map'))
-        .toSorted((a, b) => a.localeCompare(b)),
-      composables.toSorted((a, b) => a.localeCompare(b)),
+        .toSorted((a, b) => collator.compare(a, b)),
+      composables.toSorted((a, b) => collator.compare(a, b)),
       JSON.parse(await output(root, 'dist/module.json')),
     ]).toEqual([
       [
@@ -279,11 +288,11 @@ describe('nuxtModule builds', () => {
   it('writes .js entries and .d.ts declarations with extension .js', async () => {
     const root = await fixture(files);
     await buildFixture(root, { entry, extension: '.js' });
-    const dist = await readdir(nodePath.join(root, 'dist'));
+    const distribution = await readdir(nodePath.join(root, 'dist'));
     expect(
-      dist
+      distribution
         .filter((f) => !f.endsWith('.map'))
-        .toSorted((a, b) => a.localeCompare(b)),
+        .toSorted((a, b) => collator.compare(a, b)),
     ).toEqual([
       'index.d.ts',
       'index.js',
@@ -308,7 +317,7 @@ describe('nuxtModule builds', () => {
     };
     await expect(
       buildFixture(root, { entry }, { plugins: [lateWarning] }),
-    ).rejects.toThrow(/late warning/);
+    ).rejects.toThrow(LATE_WARNING_PATTERN);
     expect(await pathExists(nodePath.join(root, 'dist/runtime'))).toBe(false);
   }, 60_000);
 
@@ -320,7 +329,7 @@ describe('nuxtModule builds', () => {
       await output(root, 'dist/runtime/composables/useThing.d.ts'),
     ]).toEqual([
       expect.stringContaining('from "../lib/helper.js"'),
-      expect.stringMatching(/["']\.\.\/lib\/helper\.js["']/),
+      expect.stringMatching(HELPER_IMPORT_PATTERN),
     ]);
   }, 60_000);
 
@@ -328,7 +337,7 @@ describe('nuxtModule builds', () => {
     const root = await fixture(files);
     await buildFixture(root, { entry });
     expect(await output(root, 'dist/index.d.mts')).toMatch(
-      /from ["']\.\/runtime\/composables\/useThing\.js["']/,
+      USE_THING_IMPORT_PATTERN,
     );
   }, 60_000);
 
@@ -338,7 +347,9 @@ describe('nuxtModule builds', () => {
       'src/runtime/composables/useOther.ts':
         'export const useOther = (): number => "s";\n',
     });
-    await expect(buildFixture(root, { entry })).rejects.toThrow(/type error/);
+    await expect(buildFixture(root, { entry })).rejects.toThrow(
+      TYPE_ERROR_PATTERN,
+    );
   }, 60_000);
 
   it('writes .d.ts copies of the bundled entries with dts.compatible', async () => {

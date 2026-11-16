@@ -9,6 +9,8 @@ import { packageTypeScript } from '../resolve.js';
 import { absolutePaths, parsedTsconfig } from '../tsconfig.js';
 import { walk } from '../walk.js';
 
+const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/;
+
 /** What {@link selfReferenceOptions} adds to the declaration step's options. */
 export interface SelfReferenceOptions {
   readonly compilerOptions?: { readonly paths: Record<string, string[]> };
@@ -21,7 +23,7 @@ const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts'];
 /** The `types` target of an exports-map entry: a `.d.ts` string, or the first `types` condition found. */
 export function typesTarget(entry: unknown): string | undefined {
   if (typeof entry === 'string')
-    return /\.d\.[cm]?ts$/.test(entry) ? entry : undefined;
+    return DECLARATION_FILE_PATTERN.test(entry) ? entry : undefined;
   if (!entry || typeof entry !== 'object') return undefined;
   const conditions = entry as Record<string, unknown>;
   if (typeof conditions.types === 'string') return conditions.types;
@@ -73,19 +75,27 @@ export async function selfReferenceOptions(
     ? (pkg.exports as Record<string, unknown>)
     : { '.': pkg.exports };
   const found = await Promise.all(
-    Object.entries(map).map(async ([sub, target]) => {
-      const types = typesTarget(target);
-      const rel = types
-        ? path.relative(dtsOutDir, path.resolve(root, types))
-        : '..';
-      if (!types || sub.includes('*') || rel.startsWith('..')) return undefined;
-      const name = posixPath(rel.replace(/\.d\.[cm]?ts$/, ''));
-      const base = path.resolve(entryRoot, name);
-      const candidates = SOURCE_EXTENSIONS.map((e) => base + e);
-      const present = await Promise.all(candidates.map((f) => exists(f)));
-      const source = entries[name] ?? candidates.find((_, i) => present[i]);
-      return source ? ([sub, source] as const) : undefined;
-    }),
+    Object.entries(map).map(
+      async ([sub, target]): Promise<readonly [string, string] | undefined> => {
+        const types = typesTarget(target);
+        const relativeTypes = types
+          ? path.relative(dtsOutDir, path.resolve(root, types))
+          : '..';
+        if (!types || sub.includes('*') || relativeTypes.startsWith('..'))
+          return undefined;
+        const name = posixPath(
+          relativeTypes.replace(DECLARATION_FILE_PATTERN, ''),
+        );
+        const base = path.resolve(entryRoot, name);
+        const candidates = SOURCE_EXTENSIONS.map(
+          (extension) => base + extension,
+        );
+        const present = await Promise.all(candidates.map((f) => exists(f)));
+        const source =
+          entries[name] ?? candidates.find((_, index) => present[index]);
+        return source ? ([sub, source] as const) : undefined;
+      },
+    ),
   );
   const paths: Record<string, string[]> = {};
   for (const entry of found) {

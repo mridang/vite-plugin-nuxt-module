@@ -9,6 +9,10 @@ import {
   rewriteRuntimeTypeAliases,
 } from '../src/runtime-declarations.js';
 
+const LIB_X_IMPORT_PATTERN = /from ["']\.\/lib\/x\.js["']/;
+const UNRESOLVED_IMPORTS_PATTERN =
+  /cannot resolve[\s\S]*#imports[\s\S]*prepare: true/;
+
 describe('declarationFileOf', () => {
   it.each([
     ['/m/runtime/a.ts', '/m/runtime/a.d.ts'],
@@ -102,7 +106,7 @@ describe('emitRuntimeDeclarations', () => {
       await output(root, 'dist/runtime/plugin.d.ts'),
       await output(root, 'dist/runtime/lib/x.d.ts'),
     ]).toEqual([
-      expect.stringMatching(/from ["']\.\/lib\/x\.js["']/),
+      expect.stringMatching(LIB_X_IMPORT_PATTERN),
       expect.stringContaining('n: number'),
     ]);
   });
@@ -127,7 +131,7 @@ describe('emitRuntimeDeclarations', () => {
         'import { defineNuxtPlugin } from "#imports";\nexport default defineNuxtPlugin(() => {});\n',
     });
     await expect(emit(root, ['src/runtime/plugin.ts'])).rejects.toThrow(
-      /cannot resolve[\s\S]*#imports[\s\S]*prepare: true/,
+      UNRESOLVED_IMPORTS_PATTERN,
     );
   });
 

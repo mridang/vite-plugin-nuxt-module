@@ -10,6 +10,8 @@ import '../utils/realm.js';
 
 import { FIXTURES, PACKAGE_ROOT } from './paths.js';
 
+const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/;
+
 const { join } = path;
 
 /** The name the fixture module is published and installed under. */
@@ -142,7 +144,9 @@ export function typeErrors(appDir: string, file: string): string[] {
     { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => undefined },
   );
   if (!parsed) throw new Error(`cannot read ${tsconfig}`);
-  const ambient = parsed.fileNames.filter((name) => /\.d\.[cm]?ts$/.test(name));
+  const ambient = parsed.fileNames.filter((name) =>
+    DECLARATION_FILE_PATTERN.test(name),
+  );
   const target = path.resolve(appDir, file);
   const program = ts.createProgram({
     rootNames: [...ambient, target],

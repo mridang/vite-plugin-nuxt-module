@@ -3,9 +3,12 @@ import { parseAst } from 'rolldown/parseAst';
 
 import { PLUGIN_PREFIX } from '../defaults.js';
 
+const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/;
+const SCRIPT_FILE_PATTERN = /\.[cm]?tsx?$/;
+
 /** The parser language of a declaration-step module: `.d.ts` files, `.tsx`, else TypeScript. */
 function languageOf(id: string): 'dts' | 'tsx' | 'ts' {
-  if (/\.d\.[cm]?ts$/.test(id)) return 'dts';
+  if (DECLARATION_FILE_PATTERN.test(id)) return 'dts';
   return id.endsWith('.tsx') ? 'tsx' : 'ts';
 }
 
@@ -87,7 +90,7 @@ export function finishedDeclarations(): RolldownPlugin {
     },
     transform: {
       order: 'pre',
-      filter: { id: /\.[cm]?tsx?$/ },
+      filter: { id: SCRIPT_FILE_PATTERN },
       handler(code, id) {
         const found = starReExports(code, id);
         for (const source of found.typeOnly) typeOnly.add(source);

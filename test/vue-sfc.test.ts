@@ -9,14 +9,17 @@ import {
   vueTransformer,
 } from '../src/vue-sfc.js';
 
+const INSTALL_TRANSFORMER_PATTERN = /install vue-sfc-transformer/;
+const INDENTED_COMMENT_PATTERN = /^\/\* indented /;
+
 const { dirname, join } = nodePath;
 
-const dirs: string[] = [];
+const directories: string[] = [];
 async function tree(files: Record<string, string>): Promise<string> {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), 'nuxt-plugin-test-')),
   );
-  dirs.push(root);
+  directories.push(root);
   for (const [path, content] of Object.entries(files)) {
     await mkdir(dirname(join(root, path)), { recursive: true });
     await writeFile(join(root, path), content);
@@ -24,7 +27,8 @@ async function tree(files: Record<string, string>): Promise<string> {
   return root;
 }
 afterEach(async () => {
-  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
+  for (const d of directories.splice(0))
+    await rm(d, { recursive: true, force: true });
 });
 
 /** A fake `vue-sfc-transformer` at `dir` whose loader names where it was installed. */
@@ -80,7 +84,7 @@ describe('vueTransformer', () => {
   it('fails naming vue-sfc-transformer when the module does not install it', async () => {
     const root = await tree({ 'package.json': '{}' });
     await expect(vueTransformer(root)).rejects.toThrow(
-      /install vue-sfc-transformer/,
+      INSTALL_TRANSFORMER_PATTERN,
     );
   });
 
@@ -155,7 +159,7 @@ describe('sfcSnippetLoader', () => {
       extension: '.sass',
       getContents: () => 'a\n  b: c',
     });
-    expect(out?.contents).toMatch(/^\/\* indented /);
+    expect(out?.contents).toMatch(INDENTED_COMMENT_PATTERN);
   });
 
   it('leaves plain CSS style blocks to the consuming app', async () => {

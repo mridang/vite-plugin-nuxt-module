@@ -8,6 +8,9 @@ import {
   resolvedEntries,
 } from '../src/entries.js';
 
+const DUPLICATE_INDEX_NAME_PATTERN =
+  /src\/a\/index\.ts and src\/b\/index\.ts are both named "index"/;
+
 const { join } = path;
 
 describe('entryName', () => {
@@ -26,7 +29,7 @@ describe('namedEntries', () => {
 
   it('refuses two listed files with the same name instead of dropping one', () => {
     expect(() => namedEntries(['src/a/index.ts', 'src/b/index.ts'])).toThrow(
-      /src\/a\/index\.ts and src\/b\/index\.ts are both named "index"/,
+      DUPLICATE_INDEX_NAME_PATTERN,
     );
   });
 

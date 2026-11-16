@@ -14,6 +14,8 @@ import {
   resolveFromRoot,
 } from '../src/resolve.js';
 
+const MISSING_TOOL_PATTERN = /cannot find package missing-tool/;
+
 async function tree(files: Record<string, string>): Promise<string> {
   const root = await mkdtemp(nodePath.join(tmpdir(), 'vite-resolve-'));
   for (const [path, content] of Object.entries(files)) {
@@ -130,7 +132,7 @@ describe('importFromRoot', () => {
   it('fails for a package that is not installed', async () => {
     await expect(
       importFromRoot('missing-tool', await tree({ 'package.json': '{}' })),
-    ).rejects.toThrow(/cannot find package missing-tool/);
+    ).rejects.toThrow(MISSING_TOOL_PATTERN);
   });
 });
 

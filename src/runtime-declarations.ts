@@ -18,6 +18,11 @@ import {
 } from './specifiers.js';
 import { effectiveTsconfig } from './nuxt-tsconfig.js';
 
+const SCRIPT_EXTENSION_PATTERN = /\.([mc])?[jt]sx?$/;
+const NUXT_APP_SPECIFIER_PATTERN = /^#app(\/|$)/;
+const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/;
+const VUE_DECLARATION_SUFFIX_PATTERN = /\.vue\.d\.ts$/;
+
 const { dirname, join, relative, resolve } = path;
 
 const exists = (file: string): Promise<boolean> =>
@@ -37,7 +42,7 @@ export interface RuntimeDeclarationsOptions {
 /** Where a source file's declaration is written by TypeScript (no `outDir`): next to it. */
 export function declarationFileOf(file: string): string {
   if (file.endsWith('.vue')) return `${file}.d.ts`;
-  return file.replace(/\.([mc])?[jt]sx?$/, '.d.$1ts');
+  return file.replace(SCRIPT_EXTENSION_PATTERN, '.d.$1ts');
 }
 
 /**
@@ -48,7 +53,7 @@ export async function rewriteRuntimeTypeAliases(code: string): Promise<string> {
   return applyEdits(
     code,
     await specifierEdits(code, 'dts', (spec) =>
-      /^#app(\/|$)/.test(spec) ? 'nuxt/app' : undefined,
+      NUXT_APP_SPECIFIER_PATTERN.test(spec) ? 'nuxt/app' : undefined,
     ),
   );
 }
@@ -120,7 +125,9 @@ export async function emitRuntimeDeclarations(
   if (inputs.length > 0) {
     const project = parsedTsconfig(ts, tsconfig);
     const options = declarationCompilerOptions(project.options);
-    const ambient = project.fileNames.filter((f) => /\.d\.[cm]?ts$/.test(f));
+    const ambient = project.fileNames.filter((f) =>
+      DECLARATION_FILE_PATTERN.test(f),
+    );
     const host = ts.createCompilerHost(options);
     const written = new Map<string, string>();
     host.writeFile = (name, text) => {
@@ -157,21 +164,28 @@ export async function emitRuntimeDeclarations(
     for (const input of inputs) {
       // A declaration written by hand next to its source (`plain.js` + `plain.d.ts`) is shipped as written.
       if (await exists(declarationFileOf(input))) continue;
-      const rel = relative(o.runtimeDir, declarationFileOf(input));
+      const relativePath = relative(o.runtimeDir, declarationFileOf(input));
       const text = written.get(declarationFileOf(input));
       if (text === undefined)
         throw new Error(`nuxtModule: no declaration was emitted for ${input}`);
-      const dest = join(out, rel);
-      await mkdir(dirname(dest), { recursive: true });
+      const destination = join(out, relativePath);
+      await mkdir(dirname(destination), { recursive: true });
       const code = await rewriteRuntimeTypeAliases(
-        await rewriteDeclarationImports(text, join(o.runtimeDir, rel), o.scope),
+        await rewriteDeclarationImports(
+          text,
+          join(o.runtimeDir, relativePath),
+          o.scope,
+        ),
       );
-      await writeFile(dest, code);
-      shipped.push([dest, code]);
+      await writeFile(destination, code);
+      shipped.push([destination, code]);
       // vue-tsc names these `X.vue.d.ts`; newer TS tooling also looks for `X.d.vue.ts`.
-      if (rel.endsWith('.vue.d.ts'))
+      if (relativePath.endsWith('.vue.d.ts'))
         await writeFile(
-          join(out, rel.replace(/\.vue\.d\.ts$/, '.d.vue.ts')),
+          join(
+            out,
+            relativePath.replace(VUE_DECLARATION_SUFFIX_PATTERN, '.d.vue.ts'),
+          ),
           code,
         );
     }

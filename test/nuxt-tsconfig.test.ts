@@ -9,6 +9,12 @@ import {
   optionalTsconfig,
 } from '../src/nuxt-tsconfig.js';
 
+const CANNOT_READ_PATTERN = /cannot read/;
+const NUXI_PREPARE_PATTERN = /nuxi prepare/;
+const BASE_JSON_MISSING_PATTERN = /base\.json, which does not exist/;
+const BUILD_TSCONFIG_MISSING_PATTERN =
+  /tsconfig\.build\.json, which does not exist/;
+
 /** A module root holding `files`, with TypeScript installed. */
 const tree = async (files: Record<string, string>): Promise<string> =>
   await fixture(files, { link: ['typescript'] });
@@ -58,14 +64,14 @@ describe('missingTsconfigFile', () => {
     const root = await tree({ 'tsconfig.json': '{ "extends": ' });
     await expect(
       missingTsconfigFile(ts, nodePath.join(root, 'tsconfig.json')),
-    ).rejects.toThrow(/cannot read/);
+    ).rejects.toThrow(CANNOT_READ_PATTERN);
   });
 });
 
 describe('effectiveTsconfig', () => {
   it('uses a config whose chain is complete as it is', async () => {
     const root = await tree({ 'tsconfig.json': '{}', 'package.json': '{}' });
-    expect(await effectiveTsconfig(root, undefined)).toBe(
+    expect(await effectiveTsconfig(root)).toBe(
       nodePath.join(root, 'tsconfig.json'),
     );
   });
@@ -76,7 +82,7 @@ describe('effectiveTsconfig', () => {
         '{ "compilerOptions": { "paths": { "@/*": ["./src/*"] }, }, "include": ["src/**/*.ts"], }',
       'package.json': '{}',
     });
-    expect(await effectiveTsconfig(root, undefined)).toBe(
+    expect(await effectiveTsconfig(root)).toBe(
       nodePath.join(root, 'tsconfig.json'),
     );
   });
@@ -86,9 +92,7 @@ describe('effectiveTsconfig', () => {
       'tsconfig.json': '{ "extends": "./.nuxt/tsconfig.json" }',
       'package.json': '{}',
     });
-    await expect(effectiveTsconfig(root, undefined)).rejects.toThrow(
-      /nuxi prepare/,
-    );
+    await expect(effectiveTsconfig(root)).rejects.toThrow(NUXI_PREPARE_PATTERN);
   });
 
   it('fails on any other broken chain instead of guessing options', async () => {
@@ -96,8 +100,8 @@ describe('effectiveTsconfig', () => {
       'tsconfig.json': '{ "extends": "./base.json" }',
       'package.json': '{}',
     });
-    await expect(effectiveTsconfig(root, undefined)).rejects.toThrow(
-      /base\.json, which does not exist/,
+    await expect(effectiveTsconfig(root)).rejects.toThrow(
+      BASE_JSON_MISSING_PATTERN,
     );
   });
 });
@@ -118,6 +122,6 @@ describe('optionalTsconfig', () => {
     const root = await tree({ 'package.json': '{}' });
     await expect(
       optionalTsconfig(root, 'tsconfig.build.json', true),
-    ).rejects.toThrow(/tsconfig\.build\.json, which does not exist/);
+    ).rejects.toThrow(BUILD_TSCONFIG_MISSING_PATTERN);
   });
 });

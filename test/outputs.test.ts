@@ -269,7 +269,7 @@ describe('nuxtModuleOutputs', () => {
       build: { outDir: 'dist' },
       plugins: [],
     });
-    (plugin.buildEnd as unknown as (e: Error) => void)(new Error('x'));
+    (plugin.buildEnd as unknown as (error: Error) => void)(new Error('x'));
     await (plugin.closeBundle as unknown as () => Promise<void>)();
     expect(await pathExists(nodePath.join(root, 'dist/module.json'))).toBe(
       false,
