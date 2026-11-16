@@ -33,17 +33,16 @@ const NUXT_VERSION_PAGE_PATTERN = /data-test="nuxt">4\.\d+\.\d+\|true\|1</;
 const GREETINGS_PATTERN = /data-test="greetings">([^<]*)</;
 const SERVER_TIMING_PATTERN = /^hello;dur=\d+\.\d$/;
 
-const { join } = path;
 const work = workDirectory();
-const moduleDir = join(work, 'module');
-const appDir = join(work, 'app');
-const typesDir = join(work, 'app-types');
-const tarballDir = join(work, 'tarball');
+const moduleDir = path.join(work, 'module');
+const appDir = path.join(work, 'app');
+const typesDir = path.join(work, 'app-types');
+const tarballDir = path.join(work, 'tarball');
 let tarball = '';
 
 /** The built module, as the app installed it. */
-const installed = (...path: string[]) =>
-  join(appDir, 'node_modules', MODULE_NAME, ...path);
+const installed = (...segments: string[]) =>
+  path.join(appDir, 'node_modules', MODULE_NAME, ...segments);
 
 // The module is built, packed and installed before Nuxt builds the app, and removed after it stops.
 beforeAll(async () => {
@@ -67,7 +66,7 @@ await setup({
   server: true,
   browser: false,
   runner: 'jest',
-  nuxtConfig: { nitro: { output: { dir: join(appDir, '.output') } } },
+  nuxtConfig: { nitro: { output: { dir: path.join(appDir, '.output') } } },
 });
 
 describe('the built package', () => {
@@ -81,7 +80,7 @@ describe('the built package', () => {
   it('resolves for ESM consumers under every resolution mode they use', async () => {
     // attw exits non-zero on any problem it does not ignore for ESM-only packages.
     const output = await run(
-      join(PACKAGE_ROOT, 'node_modules/.bin/attw'),
+      path.join(PACKAGE_ROOT, 'node_modules/.bin/attw'),
       [tarball, '--profile', 'esm-only', '--format', 'ascii'],
       { cwd: work },
     );
@@ -160,7 +159,7 @@ describe('the module in a Nuxt app', () => {
       (m) => m[1],
     );
     const pages = await Promise.all(
-      hrefs.map((href) => $fetch<string>(href ?? '')),
+      hrefs.map(async (href) => $fetch<string>(href ?? '')),
     );
     const linked = pages.join('\n');
     // The global stylesheet is a file of the module; the component's scoped style is inlined into the page.

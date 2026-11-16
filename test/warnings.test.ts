@@ -135,11 +135,11 @@ describe('failOnLoggedWarnings', () => {
     expect(outcome.failed).toBe(true);
   });
 
-  it('fails the build on a warning logged during the build, before the steps after it', () => {
+  it('fails the build on a warning logged during the build, before the steps after it', async () => {
     const { customLogger, plugin } = failOnLoggedWarnings({ failed: false });
     call(plugin.config, { logLevel: 'silent' });
     customLogger.warnOnce('chunk is large');
-    expect(() => call(plugin.closeBundle)).toThrow(
+    await expect(call(plugin.closeBundle)).rejects.toThrow(
       'Vite warned:\nchunk is large',
     );
   });

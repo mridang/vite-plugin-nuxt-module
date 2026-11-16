@@ -42,7 +42,7 @@ async function importsItself(
   if (!(await exists(entryRoot))) return false;
   const files = await walk(entryRoot);
   const texts = await Promise.all(
-    files.map((file) => readFile(path.join(entryRoot, file), 'utf8')),
+    files.map(async (file) => readFile(path.join(entryRoot, file), 'utf8')),
   );
   return texts.some(
     (text) =>
@@ -90,7 +90,9 @@ export async function selfReferenceOptions(
         const candidates = SOURCE_EXTENSIONS.map(
           (extension) => base + extension,
         );
-        const present = await Promise.all(candidates.map((f) => exists(f)));
+        const present = await Promise.all(
+          candidates.map(async (f) => exists(f)),
+        );
         const source =
           entries[name] ?? candidates.find((_, index) => present[index]);
         return source ? ([sub, source] as const) : undefined;

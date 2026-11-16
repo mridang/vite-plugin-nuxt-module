@@ -52,7 +52,7 @@ export async function hoistedTypePaths(
 ): Promise<Record<string, string[]>> {
   const paths: Record<string, string[]> = {};
   const directories = await Promise.all(
-    NUXT_HOISTED_TYPES.map((name) => hoistedTypeDir(name, root)),
+    NUXT_HOISTED_TYPES.map(async (name) => hoistedTypeDir(name, root)),
   );
   for (const [index, name] of NUXT_HOISTED_TYPES.entries()) {
     const dir = directories[index];

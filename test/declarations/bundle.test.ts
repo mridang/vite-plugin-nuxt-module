@@ -25,21 +25,19 @@ const STYLES_CONST_PATTERN =
   /const (\w+): \{\s*readonly \[key: string\]: string;?\s*\};[\s\S]*\1 as styles/;
 const OWN_CODE_PATTERN = /OWN_CODE: careful/;
 
-const { join, resolve } = path;
-
 /** Writes the bundled declarations of `src/index.ts` of a fixture into its `dist`. */
-const emit = (
+const emit = async (
   root: string,
   external: RegExp[] = [],
   options: Partial<Parameters<typeof emitBundledTypes>[0]> = {},
 ) =>
   emitBundledTypes({
     root,
-    entry: { index: join(root, 'src/index.ts') },
-    tsconfig: join(root, 'tsconfig.json'),
+    entry: { index: path.join(root, 'src/index.ts') },
+    tsconfig: path.join(root, 'tsconfig.json'),
     external,
     exts: ['.mjs'],
-    outDir: join(root, 'dist'),
+    outDir: path.join(root, 'dist'),
     ...options,
   });
 
@@ -104,7 +102,10 @@ describe('emitBundledTypes', () => {
       'src/index.ts': 'export const before = 1;\n',
     });
     await emit(root);
-    await writeFile(join(root, 'src/index.ts'), 'export const after = 1;\n');
+    await writeFile(
+      path.join(root, 'src/index.ts'),
+      'export const after = 1;\n',
+    );
     await emit(root);
     expect(await output(root, 'dist/index.d.mts')).toContain('after');
   }, 60_000);
@@ -191,8 +192,8 @@ describe('emitBundledTypes re-exports', () => {
     });
     await emit(root, [FX_PATTERN], {
       entry: {
-        index: join(root, 'src/index.ts'),
-        'lib/sub': join(root, 'src/lib/sub.ts'),
+        index: path.join(root, 'src/index.ts'),
+        'lib/sub': path.join(root, 'src/lib/sub.ts'),
       },
     });
     expect(await output(root, 'dist/index.d.mts')).toContain('from "fx/sub"');
@@ -201,7 +202,7 @@ describe('emitBundledTypes re-exports', () => {
 
 describe('emitBundledTypes assets', () => {
   const assetPackage = async () =>
-    await fixture({
+    fixture({
       'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
       'tsconfig.json': FIXTURE_TSCONFIG,
       'src/assets.d.ts': [
@@ -232,7 +233,9 @@ describe('emitBundledTypes assets', () => {
       sources: string[];
     };
     const exists = await Promise.all(
-      sources.map((source) => pathExists(resolve(root, 'dist', source))),
+      sources.map(async (source) =>
+        pathExists(path.resolve(root, 'dist', source)),
+      ),
     );
     expect(sources.filter((_, index) => !exists[index])).toEqual([]);
   }, 60_000);
@@ -247,7 +250,7 @@ describe('emitBundledTypes warnings', () => {
     },
   };
   const plain = async () =>
-    await fixture({
+    fixture({
       'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
       'tsconfig.json': FIXTURE_TSCONFIG,
       'src/index.ts': 'export const a = 1;\n',
@@ -256,7 +259,7 @@ describe('emitBundledTypes warnings', () => {
   it('allows a plugin warning by the code its plugin gave it, like the JS build', async () => {
     const root = await plain();
     await emit(root, [], { plugins: [warning], allowWarnings: ['OWN_CODE'] });
-    expect(await pathExists(join(root, 'dist/index.d.mts'))).toBe(true);
+    expect(await pathExists(path.join(root, 'dist/index.d.mts'))).toBe(true);
   }, 60_000);
 
   it('fails on a plugin warning that is not allowed, naming its code', async () => {

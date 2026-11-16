@@ -7,14 +7,12 @@ import {
   typesTarget,
 } from '../../src/declarations/self-reference.js';
 
-const { join } = path;
-
 async function selfReferencing(
   exportsMap: unknown,
   tsconfig: Record<string, unknown> = {},
   files: Record<string, string> = {},
 ): Promise<string> {
-  return await fixture({
+  return fixture({
     'package.json': JSON.stringify({ name: 'pkg', exports: exportsMap }),
     'src/config.tsx': 'export default 1;',
     'src/index.ts': 'export { default as config } from "pkg/config";',
@@ -46,12 +44,12 @@ describe('selfReferenceOptions', () => {
     });
     const options = await selfReferenceOptions(
       root,
-      join(root, 'dist/types'),
-      join(root, 'src'),
-      join(root, 'tsconfig.json'),
+      path.join(root, 'dist/types'),
+      path.join(root, 'src'),
+      path.join(root, 'tsconfig.json'),
     );
     expect(options.compilerOptions?.paths['pkg/config']).toEqual([
-      join(root, 'src/config.tsx'),
+      path.join(root, 'src/config.tsx'),
     ]);
   });
 
@@ -63,13 +61,13 @@ describe('selfReferenceOptions', () => {
     );
     const options = await selfReferenceOptions(
       root,
-      join(root, 'dist'),
-      join(root, 'src'),
-      join(root, 'tsconfig.json'),
-      { config: join(root, 'src/cfg/main.ts') },
+      path.join(root, 'dist'),
+      path.join(root, 'src'),
+      path.join(root, 'tsconfig.json'),
+      { config: path.join(root, 'src/cfg/main.ts') },
     );
     expect(options.compilerOptions?.paths['pkg/config']).toEqual([
-      join(root, 'src/cfg/main.ts'),
+      path.join(root, 'src/cfg/main.ts'),
     ]);
   });
 
@@ -79,9 +77,9 @@ describe('selfReferenceOptions', () => {
     });
     const options = await selfReferenceOptions(
       root,
-      join(root, 'dist/types'),
-      join(root, 'src'),
-      join(root, 'tsconfig.json'),
+      path.join(root, 'dist/types'),
+      path.join(root, 'src'),
+      path.join(root, 'tsconfig.json'),
     );
     expect(options.aliasesExclude?.some((r) => r.test('pkg/config'))).toBe(
       true,
@@ -95,12 +93,12 @@ describe('selfReferenceOptions', () => {
     );
     const options = await selfReferenceOptions(
       root,
-      join(root, 'dist/types'),
-      join(root, 'src'),
-      join(root, 'tsconfig.json'),
+      path.join(root, 'dist/types'),
+      path.join(root, 'src'),
+      path.join(root, 'tsconfig.json'),
     );
     expect(options.compilerOptions?.paths['~/*']).toEqual([
-      join(root, 'src/*'),
+      path.join(root, 'src/*'),
     ]);
   });
 
@@ -116,12 +114,12 @@ describe('selfReferenceOptions', () => {
     );
     const options = await selfReferenceOptions(
       root,
-      join(root, 'dist/types'),
-      join(root, 'src'),
-      join(root, 'tsconfig.json'),
+      path.join(root, 'dist/types'),
+      path.join(root, 'src'),
+      path.join(root, 'tsconfig.json'),
     );
     expect(options.compilerOptions?.paths['~/*']).toEqual([
-      join(root, 'src/*'),
+      path.join(root, 'src/*'),
     ]);
   });
 
@@ -134,9 +132,9 @@ describe('selfReferenceOptions', () => {
     expect(
       await selfReferenceOptions(
         root,
-        join(root, 'dist/types'),
-        join(root, 'src'),
-        join(root, 'tsconfig.json'),
+        path.join(root, 'dist/types'),
+        path.join(root, 'src'),
+        path.join(root, 'tsconfig.json'),
       ),
     ).toEqual({});
   });
@@ -152,12 +150,12 @@ describe('selfReferenceOptions', () => {
     );
     const options = await selfReferenceOptions(
       root,
-      join(root, 'dist/types'),
-      join(root, 'src'),
-      join(root, 'tsconfig.json'),
+      path.join(root, 'dist/types'),
+      path.join(root, 'src'),
+      path.join(root, 'tsconfig.json'),
     );
     expect(options.compilerOptions?.paths['~/*']).toEqual([
-      join(root, 'src/*'),
+      path.join(root, 'src/*'),
     ]);
   });
 
@@ -166,9 +164,9 @@ describe('selfReferenceOptions', () => {
     expect(
       await selfReferenceOptions(
         root,
-        join(root, 'dist'),
-        join(root, 'src'),
-        join(root, 'tsconfig.json'),
+        path.join(root, 'dist'),
+        path.join(root, 'src'),
+        path.join(root, 'tsconfig.json'),
       ),
     ).toEqual({});
   });

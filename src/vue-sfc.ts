@@ -9,8 +9,6 @@ import { SASS_RE } from './specifiers.js';
 
 const TS_MODULE_EXTENSION_PATTERN = /^\.(?:[cm]?ts|tsx)$/;
 
-const { join } = path;
-
 /**
  * Where `vue-sfc-transformer` is looked for after the module itself: the packages `nuxt-module-build`
  * reaches it through (`@nuxt/module-builder` → `unbuild` → `mkdist`), each resolved from the previous.
@@ -68,7 +66,7 @@ export function sfcSnippetLoader(
       const sass = await packageSass(root);
       const { css } = sass.compileString(await file.getContents(), {
         syntax: file.extension === '.sass' ? 'indented' : 'scss',
-        loadPaths: [join(root, 'node_modules')],
+        loadPaths: [path.join(root, 'node_modules')],
         ...(file.srcPath ? { url: pathToFileURL(file.srcPath) } : {}),
       });
       return [{ contents: css, extension: '.css' }];
@@ -81,7 +79,7 @@ export function sfcSnippetLoader(
         target: 'esnext',
         sourcemap: false,
         tsconfig: { compilerOptions: {} },
-      } as Parameters<typeof transformWithOxc>[2],
+      },
     );
     return [{ contents: code, extension: '.mjs' }];
   };
@@ -91,7 +89,7 @@ export function sfcSnippetLoader(
  * `root`, then the installed directory of each package in `chain`: resolved from the previous one found (its own
  * dependency), else from `root` (the module installs it directly). A package installed nowhere is skipped.
  */
-export function dependencyChain(
+export async function dependencyChain(
   root: string,
   chain: readonly string[],
 ): Promise<string[]> {
@@ -116,7 +114,7 @@ const vueLoaderCache = new Map<string, Promise<VueLoader>>();
  * layout the transformer is reachable only through its `@nuxt/module-builder` → `unbuild` → `mkdist` chain. A runtime
  * with `.vue` files needs it: shipped with their TypeScript, the consuming app's template compiler rejects them.
  */
-export function vueTransformer(root: string): Promise<VueLoader> {
+export async function vueTransformer(root: string): Promise<VueLoader> {
   let loader = vueLoaderCache.get(root);
   if (!loader) {
     loader = (async () => {

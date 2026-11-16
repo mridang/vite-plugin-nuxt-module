@@ -2,8 +2,6 @@ import path from 'node:path';
 
 import { importFromRoot } from './resolve.js';
 
-const { resolve } = path;
-
 /** The Sass compilers this package can drive (`sass` or `sass-embedded`), in the order they are tried. */
 const SASS_COMPILERS: readonly string[] = ['sass', 'sass-embedded'];
 
@@ -51,6 +49,6 @@ export async function compileSass(
   const sass = await packageSass(root);
   return sass.compile(file, {
     style: minify ? 'compressed' : 'expanded',
-    loadPaths: [resolve(root, 'node_modules')],
+    loadPaths: [path.resolve(root, 'node_modules')],
   }).css;
 }

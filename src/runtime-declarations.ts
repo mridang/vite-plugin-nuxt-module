@@ -23,9 +23,7 @@ const NUXT_APP_SPECIFIER_PATTERN = /^#app(\/|$)/;
 const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/;
 const VUE_DECLARATION_SUFFIX_PATTERN = /\.vue\.d\.ts$/;
 
-const { dirname, join, relative, resolve } = path;
-
-const exists = (file: string): Promise<boolean> =>
+const exists = async (file: string): Promise<boolean> =>
   access(file)
     .then(() => true)
     .catch(() => false);
@@ -111,17 +109,17 @@ export async function emitRuntimeDeclarations(
   scripts: readonly string[],
   vues: readonly string[],
 ): Promise<void> {
-  const out = join(o.outDir, RUNTIME_OUT_DIR);
+  const out = path.join(o.outDir, RUNTIME_OUT_DIR);
   const tsconfig = await effectiveTsconfig(o.root, o.tsconfig);
   const vue =
     vues.length > 0
       ? await requiredVueTools(
           o.root,
-          `nuxtModule: the runtime has .vue files (${vues.map((f) => relative(o.runtimeDir, f)).join(', ')}) to type`,
+          `nuxtModule: the runtime has .vue files (${vues.map((f) => path.relative(o.runtimeDir, f)).join(', ')}) to type`,
         )
       : undefined;
   const ts = vue?.ts ?? (await packageTypeScript(o.root));
-  const inputs = [...scripts, ...vues].map((f) => resolve(f));
+  const inputs = [...scripts, ...vues].map((f) => path.resolve(f));
   if (inputs.length > 0) {
     const project = parsedTsconfig(ts, tsconfig);
     const options = declarationCompilerOptions(project.options);
@@ -131,7 +129,7 @@ export async function emitRuntimeDeclarations(
     const host = ts.createCompilerHost(options);
     const written = new Map<string, string>();
     host.writeFile = (name, text) => {
-      written.set(resolve(name), text);
+      written.set(path.resolve(name), text);
     };
     const createProgram = vue ? vue.createProgram(tsconfig) : ts.createProgram;
     const program = createProgram({
@@ -155,7 +153,7 @@ export async function emitRuntimeDeclarations(
     const own = new Set(inputs);
     const shipped: [string, string][] = [];
     const failures = result.diagnostics.filter(
-      (d) => d.file && own.has(resolve(d.file.fileName)),
+      (d) => d.file && own.has(path.resolve(d.file.fileName)),
     );
     if (failures.length > 0)
       throw new Error(
@@ -164,16 +162,19 @@ export async function emitRuntimeDeclarations(
     for (const input of inputs) {
       // A declaration written by hand next to its source (`plain.js` + `plain.d.ts`) is shipped as written.
       if (await exists(declarationFileOf(input))) continue;
-      const relativePath = relative(o.runtimeDir, declarationFileOf(input));
+      const relativePath = path.relative(
+        o.runtimeDir,
+        declarationFileOf(input),
+      );
       const text = written.get(declarationFileOf(input));
       if (text === undefined)
         throw new Error(`nuxtModule: no declaration was emitted for ${input}`);
-      const destination = join(out, relativePath);
-      await mkdir(dirname(destination), { recursive: true });
+      const destination = path.join(out, relativePath);
+      await mkdir(path.dirname(destination), { recursive: true });
       const code = await rewriteRuntimeTypeAliases(
         await rewriteDeclarationImports(
           text,
-          join(o.runtimeDir, relativePath),
+          path.join(o.runtimeDir, relativePath),
           o.scope,
         ),
       );
@@ -182,7 +183,7 @@ export async function emitRuntimeDeclarations(
       // vue-tsc names these `X.vue.d.ts`; newer TS tooling also looks for `X.d.vue.ts`.
       if (relativePath.endsWith('.vue.d.ts'))
         await writeFile(
-          join(
+          path.join(
             out,
             relativePath.replace(VUE_DECLARATION_SUFFIX_PATTERN, '.d.vue.ts'),
           ),

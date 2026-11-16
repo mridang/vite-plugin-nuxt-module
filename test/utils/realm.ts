@@ -4,8 +4,10 @@
  * (Vite hands its built-in module patterns to Rolldown that way) is rejected. Chaining the
  * context's prototype to the main realm's makes that check pass.
  */
-const MainFunction = Buffer.constructor as FunctionConstructor;
-const MainRegExp = new MainFunction('return RegExp')() as RegExpConstructor;
+const MainFunction = Buffer.constructor as new (
+  body: string,
+) => () => RegExpConstructor;
+const MainRegExp = new MainFunction('return RegExp')();
 
 if (MainRegExp !== RegExp) {
   Object.setPrototypeOf(RegExp.prototype, MainRegExp.prototype);

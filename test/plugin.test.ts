@@ -81,7 +81,7 @@ async function configFor(
 ): Promise<UserConfig> {
   const plugin = nuxtModule(options).find(
     (p) => p.name === 'nuxt-module:config',
-  ) as Plugin;
+  )!;
   const hook = plugin.config as (
     c: UserConfig,
     env: object,

@@ -27,7 +27,7 @@ import { pathExists } from './utils/fs.js';
 
 /** A module package of `files` that installs this package's own TypeScript, as the declaration steps type with it. */
 const tree = async (files: Record<string, string>): Promise<string> =>
-  await fixture(files, { link: ['typescript'] });
+  fixture(files, { link: ['typescript'] });
 
 const schemaInKit = 'node_modules/@nuxt/kit/node_modules/@nuxt/schema';
 
@@ -285,7 +285,9 @@ describe('nuxtModuleOutputs', () => {
   }, 60_000);
 
   it('declares a module that depends on @nuxt/kit only when its tsconfig sets declaration', async () => {
-    const tsconfig = JSON.parse(starterModule['tsconfig.json']);
+    const tsconfig = JSON.parse(starterModule['tsconfig.json']) as {
+      compilerOptions: Record<string, unknown>;
+    };
     const root = await tree({
       ...starterModule,
       'tsconfig.json': JSON.stringify({
@@ -318,7 +320,7 @@ describe('nuxtModuleOutputs', () => {
       { customLogger: errorLogger(errors) },
     );
     try {
-      await until(() => pathExists(declaration));
+      await until(async () => pathExists(declaration));
       await appendFile(module, 'export const broken: number = "nan";\n');
       await until(() => errors.length > 0);
       await writeFile(
@@ -357,15 +359,17 @@ describe('nuxtModuleOutputs', () => {
   ])(
     'writes module.json, and types.d.mts when the exports %j name it',
     async (exportsMap, typesEntry) => {
-      const pkg = JSON.parse(starterModule['package.json']);
+      const pkg = JSON.parse(starterModule['package.json']) as object;
       const root = await tree({
         ...starterModule,
         'package.json': JSON.stringify({ ...pkg, exports: exportsMap }),
       });
       await buildModule(root);
       expect([
-        JSON.parse(
-          await readFile(nodePath.join(root, 'dist/module.json'), 'utf8'),
+        (
+          JSON.parse(
+            await readFile(nodePath.join(root, 'dist/module.json'), 'utf8'),
+          ) as { name: string }
         ).name,
         await pathExists(nodePath.join(root, 'dist/types.d.mts')),
       ]).toEqual(['starter', typesEntry]);

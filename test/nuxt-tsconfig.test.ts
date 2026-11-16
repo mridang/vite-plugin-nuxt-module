@@ -17,7 +17,7 @@ const BUILD_TSCONFIG_MISSING_PATTERN =
 
 /** A module root holding `files`, with TypeScript installed. */
 const tree = async (files: Record<string, string>): Promise<string> =>
-  await fixture(files, { link: ['typescript'] });
+  fixture(files, { link: ['typescript'] });
 
 describe('missingTsconfigFile', () => {
   it('accepts a config whose relative extends exist', async () => {

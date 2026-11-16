@@ -11,7 +11,7 @@ interface TsconfigJson {
   readonly extends?: unknown;
 }
 
-const isFile = (p: string): Promise<boolean> =>
+const isFile = async (p: string): Promise<boolean> =>
   stat(p)
     .then((info) => info.isFile())
     .catch(() => false);
@@ -27,12 +27,12 @@ export async function missingTsconfigFile(
   file: string,
 ): Promise<string | undefined> {
   if (!(await isFile(file))) return file;
-  const { config, error } = ts.readConfigFile(file, ts.sys.readFile);
-  if (error)
+  const read = ts.readConfigFile(file, ts.sys.readFile.bind(ts.sys));
+  if (read.error)
     throw new Error(
-      `cannot read ${file}: ${ts.flattenDiagnosticMessageText(error.messageText, '\n')}`,
+      `cannot read ${file}: ${ts.flattenDiagnosticMessageText(read.error.messageText, '\n')}`,
     );
-  const json = (config ?? {}) as TsconfigJson;
+  const json = (read.config ?? {}) as TsconfigJson;
   const missingReference = await firstFound(
     json.references ?? [],
     async (ref) => {

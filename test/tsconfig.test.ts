@@ -11,8 +11,6 @@ import {
   parsedTsconfig,
 } from '../src/tsconfig.js';
 
-const { join } = nodePath;
-
 describe('parsedTsconfig', () => {
   it('applies the extends chain, with overrides on top', async () => {
     const root = await fixture({
@@ -26,9 +24,13 @@ describe('parsedTsconfig', () => {
       }),
     });
     const ts = await packageTypeScript(root);
-    const { options } = parsedTsconfig(ts, join(root, 'tsconfig.json'), {
-      noEmit: true,
-    });
+    const { options } = parsedTsconfig(
+      ts,
+      nodePath.join(root, 'tsconfig.json'),
+      {
+        noEmit: true,
+      },
+    );
     expect([options.strict, options.jsx, options.noEmit]).toEqual([
       true,
       ts.JsxEmit.Preserve,
@@ -38,7 +40,7 @@ describe('parsedTsconfig', () => {
 
   it('fails on a tsconfig it cannot read, naming it', async () => {
     const root = await fixture({ 'package.json': '{}' });
-    const tsconfig = join(root, 'missing.json');
+    const tsconfig = nodePath.join(root, 'missing.json');
     const ts = await packageTypeScript(root);
     expect(() => parsedTsconfig(ts, tsconfig)).toThrow(
       `cannot read ${tsconfig}`,
@@ -61,12 +63,12 @@ describe('absolutePaths', () => {
     const ts = await packageTypeScript(root);
     const paths = (name: string) =>
       absolutePaths(
-        parsedTsconfig(ts, join(root, name)).options,
-        join(root, name),
+        parsedTsconfig(ts, nodePath.join(root, name)).options,
+        nodePath.join(root, name),
       );
     expect([paths('tsconfig.json'), paths('tsconfig.own.json')]).toEqual([
-      { 'a/*': [join(root, 'a/*')] },
-      { 'b/*': [join(root, 'lib/b/*')] },
+      { 'a/*': [nodePath.join(root, 'a/*')] },
+      { 'b/*': [nodePath.join(root, 'lib/b/*')] },
     ]);
   });
 
@@ -78,11 +80,11 @@ describe('absolutePaths', () => {
 describe('packageTsconfig', () => {
   const tree = async (files: Record<string, string>): Promise<string> => {
     const dir = await realpath(
-      await mkdtemp(join(tmpdir(), 'nuxt-module-tsconfig-')),
+      await mkdtemp(nodePath.join(tmpdir(), 'nuxt-module-tsconfig-')),
     );
     for (const [name, text] of Object.entries(files)) {
-      await mkdir(join(dir, name, '..'), { recursive: true });
-      await writeFile(join(dir, name), text);
+      await mkdir(nodePath.join(dir, name, '..'), { recursive: true });
+      await writeFile(nodePath.join(dir, name), text);
     }
     return dir;
   };
@@ -97,8 +99,8 @@ describe('packageTsconfig', () => {
       await packageTsconfig(withLibrary),
       await packageTsconfig(without),
     ]).toEqual([
-      join(withLibrary, 'tsconfig.lib.json'),
-      join(without, 'tsconfig.json'),
+      nodePath.join(withLibrary, 'tsconfig.lib.json'),
+      nodePath.join(without, 'tsconfig.json'),
     ]);
   });
 
@@ -107,15 +109,15 @@ describe('packageTsconfig', () => {
       'tsconfig.json': '{}',
       'packages/x/package.json': '{}',
     });
-    expect(await packageTsconfig(join(root, 'packages/x'))).toBe(
-      join(root, 'tsconfig.json'),
+    expect(await packageTsconfig(nodePath.join(root, 'packages/x'))).toBe(
+      nodePath.join(root, 'tsconfig.json'),
     );
   });
 
   it('takes a named tsconfig as it is, without looking further', async () => {
     const root = await tree({ 'tsconfig.json': '{}' });
     expect(await packageTsconfig(root, 'tsconfig.build.json')).toBe(
-      join(root, 'tsconfig.build.json'),
+      nodePath.join(root, 'tsconfig.build.json'),
     );
   });
 });

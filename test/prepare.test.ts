@@ -55,8 +55,19 @@ function fakeCli(dir: string, name: string, body = ''): Record<string, string> {
   };
 }
 
-const loaded = async (root: string) =>
-  JSON.parse(await readFile(nodePath.join(root, 'loaded.json'), 'utf8'));
+/** What the fake nuxi recorded about the run it was asked to do. */
+interface LoadedState {
+  cli: string;
+  command: unknown;
+  cwd: string;
+  overrides: { modules: unknown[] };
+  modules: string[];
+}
+
+const loaded = async (root: string): Promise<LoadedState> =>
+  JSON.parse(
+    await readFile(nodePath.join(root, 'loaded.json'), 'utf8'),
+  ) as LoadedState;
 
 describe('prepareModule', () => {
   it("writes the module's .nuxt types", async () => {

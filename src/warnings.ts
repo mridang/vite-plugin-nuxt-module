@@ -178,7 +178,7 @@ export function failOnLoggedWarnings(outcome: BuildOutcome): {
     },
     closeBundle: {
       order: 'pre',
-      handler() {
+      async handler() {
         if (!resolved?.build.watch) return check();
         return closeStep(resolved, WARNINGS_PLUGIN, check);
       },
@@ -272,7 +272,7 @@ function onClose(
           throw error;
         }
       };
-      const done = previous.then(() => closeStep(resolved, name, step));
+      const done = previous.then(async () => closeStep(resolved, name, step));
       previous = done.catch(() => {});
       return done;
     },

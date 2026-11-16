@@ -6,8 +6,6 @@ import { afterEach, describe, expect, it, jest } from '@jest/globals';
 import { FIXTURE_TSCONFIG, fixture } from '../utils/fixture.js';
 import { requiredVueTools, vueTools } from '../../src/declarations/vue.js';
 
-const { join } = path;
-
 afterEach(() => {
   jest.resetModules();
 });
@@ -33,7 +31,7 @@ describe('vueTools', () => {
       'src/index.ts': 'export { default as Comp } from "./Comp.vue";\n',
     });
     const tools = await vueTools(root);
-    const tsconfig = join(root, 'tsconfig.json');
+    const tsconfig = path.join(root, 'tsconfig.json');
     const options = {
       strict: true,
       noEmit: true,
@@ -41,7 +39,7 @@ describe('vueTools', () => {
       types: [],
     };
     const program = tools?.createProgram(tsconfig)({
-      rootNames: [join(root, 'src/index.ts')],
+      rootNames: [path.join(root, 'src/index.ts')],
       options,
       host: tools.ts.createCompilerHost(options),
     });
