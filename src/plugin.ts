@@ -67,7 +67,7 @@ export function nuxtModule(options: NuxtModuleOptions = {}): Plugin[] {
       if (o.prepare) await prepareModule(root, o.entry.module ?? '');
       // A module's tsconfig usually extends `.nuxt/tsconfig.json`, which only a prepare writes.
       await optionalTsconfig(root, o.tsconfig, o.dts || o.prepare);
-      return await buildConfig(o, user, logged.customLogger, outcome);
+      return buildConfig(o, user, logged.customLogger, outcome);
     },
   };
 
@@ -130,8 +130,8 @@ export async function buildConfig(
           chunkFileNames: sharedChunkFileNames(o.extension),
         },
         // Both hooks are needed: some warnings never reach `onwarn`.
-        onLog: policy.onLog,
-        onwarn: policy.onwarn,
+        onLog: policy.onLog.bind(policy),
+        onwarn: policy.onwarn.bind(policy),
       },
     },
   };

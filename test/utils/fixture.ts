@@ -15,10 +15,8 @@ import { PACKAGE_ROOT } from '../contract/paths.js';
 import './realm.js';
 import { type NuxtModuleOptions, nuxtModule } from '../../src/index.js';
 
-const { dirname, join } = nodePath;
-
 /** This package's own `node_modules`, which every fixture links so it resolves the build tools. */
-const OWN_NODE_MODULES = join(PACKAGE_ROOT, 'node_modules');
+const OWN_NODE_MODULES = nodePath.join(PACKAGE_ROOT, 'node_modules');
 
 /** A compiler setup the declaration steps of a fixture can type with. */
 export const FIXTURE_TSCONFIG = JSON.stringify({
@@ -44,24 +42,28 @@ export async function fixture(
   files: Record<string, string>,
   options: { readonly link?: readonly string[] } = {},
 ): Promise<string> {
-  const root = await realpath(await mkdtemp(join(tmpdir(), 'vite-fixture-')));
+  const root = await realpath(
+    await mkdtemp(nodePath.join(tmpdir(), 'vite-fixture-')),
+  );
   for (const [name, text] of Object.entries(files)) {
-    await mkdir(dirname(join(root, name)), { recursive: true });
-    await writeFile(join(root, name), text);
+    await mkdir(nodePath.dirname(nodePath.join(root, name)), {
+      recursive: true,
+    });
+    await writeFile(nodePath.join(root, name), text);
   }
   if (options.link) {
     for (const name of options.link) {
-      await mkdir(dirname(join(root, 'node_modules', name)), {
+      await mkdir(nodePath.dirname(nodePath.join(root, 'node_modules', name)), {
         recursive: true,
       });
       await symlink(
-        join(OWN_NODE_MODULES, name),
-        join(root, 'node_modules', name),
+        nodePath.join(OWN_NODE_MODULES, name),
+        nodePath.join(root, 'node_modules', name),
         'dir',
       );
     }
   } else {
-    await symlink(OWN_NODE_MODULES, join(root, 'node_modules'), 'dir');
+    await symlink(OWN_NODE_MODULES, nodePath.join(root, 'node_modules'), 'dir');
   }
   return root;
 }
@@ -105,7 +107,7 @@ export async function watchFixture(
 
 /** A file of a fixture's build output, as text. */
 export async function output(root: string, file: string): Promise<string> {
-  return readFile(join(root, file), 'utf8');
+  return readFile(nodePath.join(root, file), 'utf8');
 }
 
 /**
@@ -117,18 +119,18 @@ export async function withTools(
   pkg: Record<string, unknown>,
   tools: Readonly<Record<string, string>>,
 ): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'vite-tools-'));
-  await writeFile(join(root, 'package.json'), JSON.stringify(pkg));
+  const root = await mkdtemp(nodePath.join(tmpdir(), 'vite-tools-'));
+  await writeFile(nodePath.join(root, 'package.json'), JSON.stringify(pkg));
   for (const [name, exportName] of Object.entries(tools)) {
-    const dir = join(root, 'node_modules', name);
+    const dir = nodePath.join(root, 'node_modules', name);
     await mkdir(dir, { recursive: true });
     await writeFile(
-      join(dir, 'package.json'),
+      nodePath.join(dir, 'package.json'),
       JSON.stringify({ name, type: 'module', exports: './index.js' }),
     );
     const factory = `(options) => ({ name: ${JSON.stringify(name)}, options })`;
     await writeFile(
-      join(dir, 'index.js'),
+      nodePath.join(dir, 'index.js'),
       exportName === 'default'
         ? `export default ${factory};\n`
         : `export const ${exportName} = ${factory};\n`,

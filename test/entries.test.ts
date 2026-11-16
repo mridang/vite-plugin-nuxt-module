@@ -11,8 +11,6 @@ import {
 const DUPLICATE_INDEX_NAME_PATTERN =
   /src\/a\/index\.ts and src\/b\/index\.ts are both named "index"/;
 
-const { join } = path;
-
 describe('entryName', () => {
   it('drops the directory and the extension', () => {
     expect(entryName('./src/lib/index.server.ts')).toBe('index.server');
@@ -53,7 +51,7 @@ describe('posixPath', () => {
 describe('resolvedEntries', () => {
   it('resolves every file against the root', () => {
     expect(resolvedEntries({ index: 'src/index.ts' }, '/pkg')).toEqual({
-      index: join('/pkg', 'src/index.ts'),
+      index: path.join('/pkg', 'src/index.ts'),
     });
   });
 });

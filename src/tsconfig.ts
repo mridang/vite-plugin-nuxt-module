@@ -4,8 +4,6 @@ import type TypeScript from 'typescript';
 import { LIB_TSCONFIG, PROJECT_TSCONFIG } from './defaults.js';
 import { exists } from './exists.js';
 
-const { dirname, join, resolve } = path;
-
 /** The TypeScript compiler module (the package's own, see `packageTypeScript`). */
 export type TS = typeof TypeScript;
 
@@ -42,14 +40,14 @@ export function absolutePaths(
   tsconfig: string,
 ): Record<string, string[]> {
   const base =
-    // eslint-disable-next-line sonarjs/deprecation -- user tsconfigs may still set baseUrl and it must keep resolving paths
+    // eslint-disable-next-line sonarjs/deprecation, @typescript-eslint/no-deprecated -- user tsconfigs may still set baseUrl and it must keep resolving paths
     options.baseUrl ??
     (options.pathsBasePath as string | undefined) ??
-    dirname(tsconfig);
+    path.dirname(tsconfig);
   return Object.fromEntries(
     Object.entries(options.paths ?? {}).map(([key, targets]) => [
       key,
-      targets.map((target) => resolve(base, target)),
+      targets.map((target) => path.resolve(base, target)),
     ]),
   );
 }
@@ -64,20 +62,22 @@ export async function packageTsconfig(
   root: string,
   tsconfig?: string,
 ): Promise<string | undefined> {
-  if (tsconfig) return resolve(root, tsconfig);
+  if (tsconfig) return path.resolve(root, tsconfig);
   const candidates = [LIB_TSCONFIG, PROJECT_TSCONFIG].map((name) =>
-    resolve(root, name),
+    path.resolve(root, name),
   );
-  const present = await Promise.all(candidates.map((file) => exists(file)));
+  const present = await Promise.all(
+    candidates.map(async (file) => exists(file)),
+  );
   const own = candidates.find((_, index) => present[index]);
   if (own) return own;
   const ancestors: string[] = [];
   for (
-    let dir = dirname(resolve(root));
-    dir !== dirname(dir);
-    dir = dirname(dir)
+    let dir = path.dirname(path.resolve(root));
+    dir !== path.dirname(dir);
+    dir = path.dirname(dir)
   )
-    ancestors.push(join(dir, PROJECT_TSCONFIG));
-  const found = await Promise.all(ancestors.map((file) => exists(file)));
+    ancestors.push(path.join(dir, PROJECT_TSCONFIG));
+  const found = await Promise.all(ancestors.map(async (file) => exists(file)));
   return ancestors.find((_, index) => found[index]);
 }

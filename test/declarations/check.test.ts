@@ -13,13 +13,10 @@ const INDEX_TS2322_ERROR_PATTERN = /^src\/index\.ts\(1,14\): error TS2322/;
 const TS2688_PATTERN = /TS2688/;
 const DIST_TS2503_ERROR_PATTERN = /dist\/index\.d\.mts\(1,17\): error TS2503/;
 
-const { join } = path;
-
 /** The compiler options of {@link FIXTURE_TSCONFIG}. */
-const fixtureOptions = JSON.parse(FIXTURE_TSCONFIG).compilerOptions as Record<
-  string,
-  unknown
->;
+const fixtureOptions = (
+  JSON.parse(FIXTURE_TSCONFIG) as { compilerOptions: Record<string, unknown> }
+).compilerOptions;
 
 describe('sourceTypeErrors', () => {
   it('reports a type error of the sources, relative to the root', async () => {
@@ -28,9 +25,9 @@ describe('sourceTypeErrors', () => {
       'tsconfig.json': FIXTURE_TSCONFIG,
       'src/index.ts': 'export const x: number = "s";\n',
     });
-    expect(await sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual([
-      expect.stringMatching(INDEX_TS2322_ERROR_PATTERN),
-    ]);
+    expect(
+      await sourceTypeErrors(root, path.join(root, 'tsconfig.json')),
+    ).toEqual([expect.stringMatching(INDEX_TS2322_ERROR_PATTERN)]);
   });
 
   it('reports nothing for sources that type-check', async () => {
@@ -39,9 +36,9 @@ describe('sourceTypeErrors', () => {
       'tsconfig.json': FIXTURE_TSCONFIG,
       'src/index.ts': 'export const x: number = 1;\n',
     });
-    expect(await sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual(
-      [],
-    );
+    expect(
+      await sourceTypeErrors(root, path.join(root, 'tsconfig.json')),
+    ).toEqual([]);
   });
 
   it('reports an option error, as tsc -p does', async () => {
@@ -53,9 +50,9 @@ describe('sourceTypeErrors', () => {
       }),
       'src/index.ts': 'export const x: number = 1;\n',
     });
-    expect(await sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual([
-      expect.stringMatching(TS2688_PATTERN),
-    ]);
+    expect(
+      await sourceTypeErrors(root, path.join(root, 'tsconfig.json')),
+    ).toEqual([expect.stringMatching(TS2688_PATTERN)]);
   });
 
   it('leaves the tests under the source root out', async () => {
@@ -66,9 +63,9 @@ describe('sourceTypeErrors', () => {
       'src/index.test.ts': 'describe("x", () => {});\n',
       'src/__tests__/helper.ts': 'expect(1);\n',
     });
-    expect(await sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual(
-      [],
-    );
+    expect(
+      await sourceTypeErrors(root, path.join(root, 'tsconfig.json')),
+    ).toEqual([]);
   });
 
   it('checks under the compiler options the declarations are emitted with', async () => {
@@ -84,8 +81,8 @@ describe('sourceTypeErrors', () => {
       { link: ['typescript'] },
     );
     expect(
-      await sourceTypeErrors(root, join(root, 'tsconfig.json'), {
-        overrides: { paths: { schema: [join(root, 'vendor/schema')] } },
+      await sourceTypeErrors(root, path.join(root, 'tsconfig.json'), {
+        overrides: { paths: { schema: [path.join(root, 'vendor/schema')] } },
       }),
     ).toEqual([]);
   });
@@ -113,9 +110,9 @@ describe('declarationTypeErrors', () => {
     expect(
       await declarationTypeErrors(
         root,
-        join(root, 'tsconfig.json'),
-        join(root, 'dist'),
-        [join(root, 'dist/index.d.mts')],
+        path.join(root, 'tsconfig.json'),
+        path.join(root, 'dist'),
+        [path.join(root, 'dist/index.d.mts')],
       ),
     ).toEqual([expect.stringMatching(DIST_TS2503_ERROR_PATTERN)]);
   });
@@ -134,14 +131,14 @@ describe('declarationTypeErrors', () => {
       },
       { link: ['typescript'] },
     );
-    await mkdir(join(root, 'src'), { recursive: true });
-    await writeFile(join(root, 'src/index.ts'), 'export {};\n');
+    await mkdir(path.join(root, 'src'), { recursive: true });
+    await writeFile(path.join(root, 'src/index.ts'), 'export {};\n');
     expect(
       await declarationTypeErrors(
         root,
-        join(root, 'tsconfig.json'),
-        join(root, 'dist'),
-        [join(root, 'dist/index.d.mts')],
+        path.join(root, 'tsconfig.json'),
+        path.join(root, 'dist'),
+        [path.join(root, 'dist/index.d.mts')],
       ),
     ).toEqual([]);
   });
@@ -159,10 +156,10 @@ describe('declarationTypeErrors', () => {
     expect(
       await declarationTypeErrors(
         root,
-        join(root, 'tsconfig.json'),
-        join(root, 'dist'),
-        [join(root, 'dist/index.d.mts')],
-        { paths: { schema: [join(root, 'vendor/schema')] } },
+        path.join(root, 'tsconfig.json'),
+        path.join(root, 'dist'),
+        [path.join(root, 'dist/index.d.mts')],
+        { paths: { schema: [path.join(root, 'vendor/schema')] } },
       ),
     ).toEqual([]);
   });

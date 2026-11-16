@@ -37,8 +37,6 @@ const RELATIVE_OR_ROOT_SPECIFIER_PATTERN = /^\.\.?(\/|$)/;
 const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/;
 const SOURCE_MODULE_PATTERN = /\.(?:[cm]?tsx?|jsx)$/;
 
-const { dirname, join, posix, relative, resolve, sep } = path;
-
 /**
  * The module's runtime directory (absolute): the one given, which must exist, else `src/runtime`
  * when the module has one; `undefined` for `runtimeDir: false`.
@@ -48,7 +46,7 @@ export async function moduleRuntimeDir(
   runtimeDir: string | false | undefined,
 ): Promise<string | undefined> {
   if (runtimeDir === false) return undefined;
-  const dir = resolve(root, runtimeDir ?? NUXT_RUNTIME_DIR);
+  const dir = path.resolve(root, runtimeDir ?? NUXT_RUNTIME_DIR);
   if (await exists(dir)) return dir;
   if (runtimeDir !== undefined)
     throw new Error(`nuxtModule: runtime directory ${runtimeDir} not found`);
@@ -113,7 +111,7 @@ const RUNTIME_SPECIFIER = 'nuxt-module-runtime:';
 
 /** The stand-in specifier of runtime source `file` (see {@link RUNTIME_SPECIFIER}). */
 function runtimeSpecifier(runtimeDir: string, file: string): string {
-  return `${RUNTIME_SPECIFIER}${runtimeOutName(relative(runtimeDir, file)).split(sep).join('/')}`;
+  return `${RUNTIME_SPECIFIER}${runtimeOutName(path.relative(runtimeDir, file)).split(path.sep).join('/')}`;
 }
 
 /** The runtime source file a relative specifier written in `importer` names, if it lies in `runtimeDir`. */
@@ -123,8 +121,8 @@ async function runtimeSource(
   importer: string,
 ): Promise<string | undefined> {
   if (!RELATIVE_SPECIFIER_PATTERN.test(id)) return undefined;
-  const target = resolve(dirname(importer), id);
-  if (!target.startsWith(runtimeDir + sep)) return undefined;
+  const target = path.resolve(path.dirname(importer), id);
+  if (!target.startsWith(runtimeDir + path.sep)) return undefined;
   return sourceFileOf(target);
 }
 
@@ -145,11 +143,13 @@ export async function renderRuntimeSpecifiers(
     (specifier): string | undefined => {
       if (!specifier.startsWith(RUNTIME_SPECIFIER)) return undefined;
       const file = specifier.slice(RUNTIME_SPECIFIER.length);
-      const path = posix.relative(
-        posix.dirname(fileName),
-        posix.join(RUNTIME_OUT_DIR, file),
+      const specifierPath = path.posix.relative(
+        path.posix.dirname(fileName),
+        path.posix.join(RUNTIME_OUT_DIR, file),
       );
-      return path.startsWith('.') ? path : `./${path}`;
+      return specifierPath.startsWith('.')
+        ? specifierPath
+        : `./${specifierPath}`;
     },
   );
   const s = new RolldownMagicString(code);
@@ -211,7 +211,11 @@ export function nuxtRuntimeExternals(
         ...opts,
         skipSelf: true,
       });
-      if (!resolved || resolved.external || !resolved.id.startsWith(dir + sep))
+      if (
+        !resolved ||
+        resolved.external ||
+        !resolved.id.startsWith(dir + path.sep)
+      )
         return null;
       return { id: runtimeSpecifier(dir, resolved.id), external: true };
     },
@@ -282,7 +286,7 @@ export function declarationRuntimeExternals(
  * runtime's declarations.
  */
 export async function buildRuntime(o: RuntimeOptions): Promise<void> {
-  const out = join(o.outDir, RUNTIME_OUT_DIR);
+  const out = path.join(o.outDir, RUNTIME_OUT_DIR);
   const shipped = await runtimeFiles(o.runtimeDir, o.exclude);
   const files = shipped.filter((f) => !isSassPartial(f));
   const scope = specifierScope(o);
@@ -291,9 +295,9 @@ export async function buildRuntime(o: RuntimeOptions): Promise<void> {
   // The module's own tsconfig (its chain checked), so oxc honours what it sets: `useDefineForClassFields`, JSX.
   const tsconfig = await optionalTsconfig(o.root, o.tsconfig, o.dts);
   for (const relativeFile of files) {
-    const from = join(o.runtimeDir, relativeFile);
-    const destination = join(out, runtimeOutName(relativeFile));
-    await mkdir(dirname(destination), { recursive: true });
+    const from = path.join(o.runtimeDir, relativeFile);
+    const destination = path.join(out, runtimeOutName(relativeFile));
+    await mkdir(path.dirname(destination), { recursive: true });
     if (DECLARATION_RE.test(relativeFile)) {
       await writeFile(
         destination,
@@ -336,7 +340,9 @@ export async function buildRuntime(o: RuntimeOptions): Promise<void> {
     await emitRuntimeDeclarations(
       { ...o, scope },
       scripts,
-      files.filter((f) => f.endsWith('.vue')).map((f) => join(o.runtimeDir, f)),
+      files
+        .filter((f) => f.endsWith('.vue'))
+        .map((f) => path.join(o.runtimeDir, f)),
     );
   }
 }

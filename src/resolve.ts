@@ -8,11 +8,9 @@ import { exists } from './exists.js';
 
 const PACKAGE_SPECIFIER_PATTERN = /^((?:@[^/]+\/)?[^/]+)(\/.*)?$/;
 
-const { dirname, join, resolve } = path;
-
 /** A `require` that resolves like code inside the package at `root`. */
 export function requireFrom(root: string): ReturnType<typeof createRequire> {
-  return createRequire(resolve(root, 'package.json'));
+  return createRequire(path.resolve(root, 'package.json'));
 }
 
 /** The export conditions a tool is loaded through: how Node's ESM loader resolves it. */
@@ -99,12 +97,14 @@ export async function packageDirectory(
   root: string,
 ): Promise<string | undefined> {
   const candidates: string[] = [];
-  for (let dir = resolve(root); ; dir = dirname(dir)) {
-    candidates.push(join(dir, 'node_modules', name));
-    if (dirname(dir) === dir) break;
+  for (let dir = path.resolve(root); ; dir = path.dirname(dir)) {
+    candidates.push(path.join(dir, 'node_modules', name));
+    if (path.dirname(dir) === dir) break;
   }
   const present = await Promise.all(
-    candidates.map((candidate) => exists(join(candidate, 'package.json'))),
+    candidates.map(async (candidate) =>
+      exists(path.join(candidate, 'package.json')),
+    ),
   );
   return candidates.find((_, index) => present[index]);
 }
@@ -134,8 +134,10 @@ async function resolvePackageFile(
   const dir = await packageDirectory(name, root);
   if (dir === undefined)
     throw new Error(`cannot find package ${name} from ${root}`);
-  if (subpath === './package.json') return join(dir, 'package.json');
-  const pkg = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8')) as {
+  if (subpath === './package.json') return path.join(dir, 'package.json');
+  const pkg = JSON.parse(
+    await readFile(path.join(dir, 'package.json'), 'utf8'),
+  ) as {
     exports?: unknown;
   };
   if (pkg.exports !== undefined) {
@@ -144,10 +146,12 @@ async function resolvePackageFile(
       exportsTarget(pkg.exports, subpath, ['require', 'node', 'default']);
     if (target === undefined)
       throw new Error(`${name} does not export ${subpath} (from ${root})`);
-    return resolve(dir, target);
+    return path.resolve(dir, target);
   }
   // No exports map: `main` (or `index.js`) of the directory, or the file a subpath names.
-  return requireFrom(root).resolve(subpath === '.' ? dir : join(dir, subpath));
+  return requireFrom(root).resolve(
+    subpath === '.' ? dir : path.join(dir, subpath),
+  );
 }
 
 /** `specifier` resolved from the package at `root`, or `undefined` when it is not installed there. */

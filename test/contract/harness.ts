@@ -12,8 +12,6 @@ import { FIXTURES, PACKAGE_ROOT } from './paths.js';
 
 const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/;
 
-const { join } = path;
-
 /** The name the fixture module is published and installed under. */
 export const MODULE_NAME = 'hello-timing';
 
@@ -25,11 +23,11 @@ const MODULE_ENTRIES = {
 
 /** Where a run keeps its copies: inside the package, so they resolve its `node_modules`, and git-ignored. */
 export function workDirectory(): string {
-  return join(PACKAGE_ROOT, '.out', 'contract', String(process.pid));
+  return path.join(PACKAGE_ROOT, '.out', 'contract', String(process.pid));
 }
 
 /** Runs `command`, resolving with its output and rejecting with it when it exits non-zero. */
-export function run(
+export async function run(
   command: string,
   args: readonly string[],
   options: { readonly cwd: string; readonly env?: typeof process.env },
@@ -65,7 +63,7 @@ export async function copyFixture(
   name: 'module' | 'app',
   into: string,
 ): Promise<string> {
-  await copyDirectory(join(FIXTURES, name), into);
+  await copyDirectory(path.join(FIXTURES, name), into);
   return into;
 }
 
@@ -92,7 +90,7 @@ export async function packModule(
   const entries = await readdir(into);
   const tarball = entries.find((file) => file.endsWith('.tgz'));
   if (!tarball) throw new Error(`npm pack wrote no tarball into ${into}`);
-  return join(into, tarball);
+  return path.join(into, tarball);
 }
 
 /** Extracts `tarball` as the package `name` of the app at `appDir`, like an install would. */
@@ -101,7 +99,7 @@ export async function installModule(
   appDir: string,
   name: string = MODULE_NAME,
 ): Promise<string> {
-  const target = join(appDir, 'node_modules', name);
+  const target = path.join(appDir, 'node_modules', name);
   await rm(target, { recursive: true, force: true });
   await mkdir(target, { recursive: true });
   await run('tar', ['-xzf', tarball, '-C', target, '--strip-components=1'], {
@@ -115,7 +113,7 @@ export async function installModule(
  * that Jest's module system cannot `require`. Writes the production server to `.output/`.
  */
 export async function buildApp(appDir: string): Promise<void> {
-  const nuxi = join(PACKAGE_ROOT, 'node_modules/.bin/nuxi');
+  const nuxi = path.join(PACKAGE_ROOT, 'node_modules/.bin/nuxi');
   await run(nuxi, ['build'], {
     cwd: appDir,
     env: { NUXT_TELEMETRY_DISABLED: '1', NODE_ENV: 'production' },
@@ -124,7 +122,7 @@ export async function buildApp(appDir: string): Promise<void> {
 
 /** `nuxi prepare` in the app at `appDir`: writes `.nuxt/` with the types the installed module adds. */
 export async function prepareApp(appDir: string): Promise<void> {
-  const nuxi = join(PACKAGE_ROOT, 'node_modules/.bin/nuxi');
+  const nuxi = path.join(PACKAGE_ROOT, 'node_modules/.bin/nuxi');
   await run(nuxi, ['prepare'], {
     cwd: appDir,
     env: { NUXT_TELEMETRY_DISABLED: '1' },
@@ -137,7 +135,7 @@ export async function prepareApp(appDir: string): Promise<void> {
  * and `file`, formatted as `tsc` prints them.
  */
 export function typeErrors(appDir: string, file: string): string[] {
-  const tsconfig = join(appDir, '.nuxt/tsconfig.json');
+  const tsconfig = path.join(appDir, '.nuxt/tsconfig.json');
   const parsed = ts.getParsedCommandLineOfConfigFile(
     tsconfig,
     { noEmit: true },

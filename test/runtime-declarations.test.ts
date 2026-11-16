@@ -72,7 +72,7 @@ describe('emitRuntimeDeclarations', () => {
     files: Record<string, string>,
     link: string[] = ['typescript'],
   ): Promise<string> =>
-    await fixture(
+    fixture(
       {
         'package.json': JSON.stringify({ name: 'mod', type: 'module' }),
         'tsconfig.json': FIXTURE_TSCONFIG,
@@ -80,7 +80,7 @@ describe('emitRuntimeDeclarations', () => {
       },
       { link },
     );
-  const emit = (root: string, scripts: string[], vues: string[] = []) => {
+  const emit = async (root: string, scripts: string[], vues: string[] = []) => {
     let tsconfig: string | undefined;
     return emitRuntimeDeclarations(
       {

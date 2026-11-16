@@ -5,8 +5,6 @@ import { parse } from 'vite';
 import { exists } from './exists.js';
 import { namesFile } from './package-json.js';
 
-const { join } = path;
-
 /** An identifier or string literal naming an export. */
 interface ExportName {
   readonly name?: string;
@@ -160,10 +158,10 @@ export async function writeTypesEntry(
 ): Promise<void> {
   const mjs = extension === '.mjs';
   // Paired with the module's own declaration extension: `module.mjs` → `types.d.mts`, `module.js` → `types.d.ts`.
-  const file = join(outDir, mjs ? 'types.d.mts' : 'types.d.ts');
+  const file = path.join(outDir, mjs ? 'types.d.mts' : 'types.d.ts');
   if ((await exists(file)) || !(await namesFile(root, file))) return;
   const declaration = await readFile(
-    join(outDir, mjs ? 'module.d.mts' : 'module.d.ts'),
+    path.join(outDir, mjs ? 'module.d.mts' : 'module.d.ts'),
     'utf8',
   );
   await writeFile(file, await typesEntry(declaration, `./module${extension}`));

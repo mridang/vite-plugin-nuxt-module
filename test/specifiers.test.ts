@@ -13,17 +13,17 @@ import {
   specifierEdits,
 } from '../src/specifiers.js';
 
-const { dirname, join } = nodePath;
-
 const directories: string[] = [];
 async function tree(files: Record<string, string>): Promise<string> {
   const root = await realpath(
-    await mkdtemp(join(tmpdir(), 'nuxt-plugin-test-')),
+    await mkdtemp(nodePath.join(tmpdir(), 'nuxt-plugin-test-')),
   );
   directories.push(root);
   for (const [path, content] of Object.entries(files)) {
-    await mkdir(dirname(join(root, path)), { recursive: true });
-    await writeFile(join(root, path), content);
+    await mkdir(nodePath.dirname(nodePath.join(root, path)), {
+      recursive: true,
+    });
+    await writeFile(nodePath.join(root, path), content);
   }
   return root;
 }
@@ -58,11 +58,14 @@ describe('runtimeOutName', () => {
 describe('rewriteSpecifier', () => {
   it('adds the per-file extension to a runtime-internal import', async () => {
     const root = await tree(layout);
-    const scope = { runtimeDir: join(root, 'src/runtime'), entries: {} };
+    const scope = {
+      runtimeDir: nodePath.join(root, 'src/runtime'),
+      entries: {},
+    };
     expect(
       await rewriteSpecifier(
         '../shared/b',
-        join(root, 'src/runtime/plugins/a.ts'),
+        nodePath.join(root, 'src/runtime/plugins/a.ts'),
         scope,
       ),
     ).toBe('../shared/b.js');
@@ -71,13 +74,15 @@ describe('rewriteSpecifier', () => {
   it("points a runtime import of a bundled entry at the entry's output", async () => {
     const root = await tree(layout);
     const scope = {
-      runtimeDir: join(root, 'src/runtime'),
-      entries: { [join(root, 'src/utils/headers.ts')]: 'utils/headers.mjs' },
+      runtimeDir: nodePath.join(root, 'src/runtime'),
+      entries: {
+        [nodePath.join(root, 'src/utils/headers.ts')]: 'utils/headers.mjs',
+      },
     };
     expect(
       await rewriteSpecifier(
         '../../utils/headers',
-        join(root, 'src/runtime/plugins/a.ts'),
+        nodePath.join(root, 'src/runtime/plugins/a.ts'),
         scope,
       ),
     ).toBe('../../utils/headers.mjs');
@@ -86,13 +91,13 @@ describe('rewriteSpecifier', () => {
   it('points a runtime import of the module at the module output', async () => {
     const root = await tree(layout);
     const scope = {
-      runtimeDir: join(root, 'src/runtime'),
-      entries: { [join(root, 'src/module.ts')]: 'module.js' },
+      runtimeDir: nodePath.join(root, 'src/runtime'),
+      entries: { [nodePath.join(root, 'src/module.ts')]: 'module.js' },
     };
     expect(
       await rewriteSpecifier(
         '../../module',
-        join(root, 'src/runtime/plugins/a.ts'),
+        nodePath.join(root, 'src/runtime/plugins/a.ts'),
         scope,
       ),
     ).toBe('../../module.js');
@@ -100,11 +105,14 @@ describe('rewriteSpecifier', () => {
 
   it('leaves an import outside the runtime that is not an entry untouched', async () => {
     const root = await tree(layout);
-    const scope = { runtimeDir: join(root, 'src/runtime'), entries: {} };
+    const scope = {
+      runtimeDir: nodePath.join(root, 'src/runtime'),
+      entries: {},
+    };
     expect(
       await rewriteSpecifier(
         '../../other',
-        join(root, 'src/runtime/plugins/a.ts'),
+        nodePath.join(root, 'src/runtime/plugins/a.ts'),
         scope,
       ),
     ).toBe('../../other');
@@ -115,18 +123,21 @@ describe('rewriteSpecifier', () => {
     expect(
       await rewriteSpecifier(
         '../components/C.vue?raw',
-        join(root, 'src/runtime/plugins/a.ts'),
+        nodePath.join(root, 'src/runtime/plugins/a.ts'),
       ),
     ).toBe('../components/C.vue?raw');
   });
 
   it('points an import of a runtime stylesheet at the CSS it compiles to', async () => {
     const root = await tree({ ...layout, 'src/runtime/assets/main.scss': '' });
-    const scope = { runtimeDir: join(root, 'src/runtime'), entries: {} };
+    const scope = {
+      runtimeDir: nodePath.join(root, 'src/runtime'),
+      entries: {},
+    };
     expect(
       await rewriteSpecifier(
         '../assets/main.scss',
-        join(root, 'src/runtime/plugins/a.ts'),
+        nodePath.join(root, 'src/runtime/plugins/a.ts'),
         scope,
       ),
     ).toBe('../assets/main.css');
@@ -134,11 +145,14 @@ describe('rewriteSpecifier', () => {
 
   it('leaves an import of a Sass partial untouched', async () => {
     const root = await tree({ ...layout, 'src/runtime/assets/_vars.scss': '' });
-    const scope = { runtimeDir: join(root, 'src/runtime'), entries: {} };
+    const scope = {
+      runtimeDir: nodePath.join(root, 'src/runtime'),
+      entries: {},
+    };
     expect(
       await rewriteSpecifier(
         '../assets/_vars.scss',
-        join(root, 'src/runtime/plugins/a.ts'),
+        nodePath.join(root, 'src/runtime/plugins/a.ts'),
         scope,
       ),
     ).toBe('../assets/_vars.scss');
@@ -151,13 +165,15 @@ describe('rewriteSpecifier', () => {
   it('rewrites entry imports inside declarations too', async () => {
     const root = await tree(layout);
     const scope = {
-      runtimeDir: join(root, 'src/runtime'),
-      entries: { [join(root, 'src/utils/headers.ts')]: 'utils/headers.mjs' },
+      runtimeDir: nodePath.join(root, 'src/runtime'),
+      entries: {
+        [nodePath.join(root, 'src/utils/headers.ts')]: 'utils/headers.mjs',
+      },
     };
     expect(
       await rewriteDeclarationImports(
         `import { x } from "../../utils/headers";`,
-        join(root, 'src/runtime/plugins/a.d.ts'),
+        nodePath.join(root, 'src/runtime/plugins/a.d.ts'),
         scope,
       ),
     ).toBe(`import { x } from "../../utils/headers.mjs";`);
@@ -170,7 +186,10 @@ describe('rewriteImports', () => {
     const code =
       'import "../shared/b";\nexport * from "../shared/b";\nconst m = () => import("../shared/b");\n';
     expect(
-      await rewriteImports(code, join(root, 'src/runtime/plugins/a.ts')),
+      await rewriteImports(
+        code,
+        nodePath.join(root, 'src/runtime/plugins/a.ts'),
+      ),
     ).toBe(
       'import "../shared/b.js";\nexport * from "../shared/b.js";\nconst m = () => import("../shared/b.js");\n',
     );
@@ -185,8 +204,8 @@ describe('sourceFileOf', () => {
     ['src/runtime/missing', undefined],
   ])('finds the source of %s', async (target, expected) => {
     const root = await tree(layout);
-    expect(await sourceFileOf(join(root, target))).toBe(
-      expected && join(root, expected),
+    expect(await sourceFileOf(nodePath.join(root, target))).toBe(
+      expected && nodePath.join(root, expected),
     );
   });
 });

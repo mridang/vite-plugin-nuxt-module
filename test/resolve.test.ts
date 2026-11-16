@@ -28,7 +28,7 @@ async function tree(files: Record<string, string>): Promise<string> {
 }
 
 /** A package root with one ESM-only tool installed whose manifest has `exports`. */
-function esmTool(
+async function esmTool(
   exports: unknown,
   files: Record<string, string>,
 ): Promise<string> {

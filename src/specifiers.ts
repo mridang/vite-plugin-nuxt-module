@@ -11,9 +11,6 @@ const QUERY_OR_HASH_CHARACTER_PATTERN = /[?#]/;
 const TS_SOURCE_EXTENSION_PATTERN = /\.(?:ts|tsx|jsx|mts|cts)$/;
 const QUOTE_OR_BACKSLASH_PATTERN = /['"\\]/;
 
-const { basename, dirname, extname, join, posix, relative, resolve, sep } =
-  path;
-
 /** A declaration file name. */
 export const DECLARATION_RE = /\.d\.[cm]?ts$/;
 
@@ -35,7 +32,7 @@ export const SASS_RE = /\.s[ac]ss$/;
 
 /** A Sass partial (`_vars.scss`): only ever `@use`d, never compiled or shipped on its own. */
 export const isSassPartial = (file: string): boolean =>
-  SASS_RE.test(file) && basename(file).startsWith('_');
+  SASS_RE.test(file) && path.basename(file).startsWith('_');
 
 /**
  * Where a runtime source file lands in `outDir/runtime` (`.ts` → `.js`, Sass → `.css`, `.vue` and other assets keep
@@ -61,7 +58,7 @@ export interface SpecifierScope {
   readonly entries: Readonly<Record<string, string>>;
 }
 
-const isFile = (p: string): Promise<boolean> =>
+const isFile = async (p: string): Promise<boolean> =>
   stat(p)
     .then((info) => info.isFile())
     .catch(() => false);
@@ -70,7 +67,7 @@ const isFile = (p: string): Promise<boolean> =>
 async function firstFile(
   files: readonly string[],
 ): Promise<string | undefined> {
-  const found = await Promise.all(files.map((file) => isFile(file)));
+  const found = await Promise.all(files.map(async (file) => isFile(file)));
   return files.find((_, index) => found[index]);
 }
 
@@ -95,7 +92,7 @@ export async function sourceFileOf(
   return (
     (await firstFile(SOURCE_EXTS.map((extension) => target + extension))) ??
     (await firstFile(
-      SOURCE_EXTS.map((extension) => join(target, `index${extension}`)),
+      SOURCE_EXTS.map((extension) => path.join(target, `index${extension}`)),
     ))
   );
 }
@@ -116,27 +113,36 @@ export async function rewriteSpecifier(
   const queryAt = spec.search(QUERY_OR_HASH_CHARACTER_PATTERN);
   const suffix = queryAt < 0 ? '' : spec.slice(queryAt);
   const bare = suffix ? spec.slice(0, -suffix.length) : spec;
-  const target = resolve(dirname(fromFile), bare);
+  const target = path.resolve(path.dirname(fromFile), bare);
   const specifierOf = (relativePath: string): string =>
     (relativePath.startsWith('.') ? relativePath : `./${relativePath}`) +
     suffix;
-  const inside = (p: string) => !scope || p.startsWith(scope.runtimeDir + sep);
+  const inside = (p: string) =>
+    !scope || p.startsWith(scope.runtimeDir + path.sep);
   const located = (p: string): string => {
     if (!scope || inside(p))
       return specifierOf(
-        relative(dirname(fromFile), runtimeOutName(p)).split(sep).join('/'),
+        path
+          .relative(path.dirname(fromFile), runtimeOutName(p))
+          .split(path.sep)
+          .join('/'),
       );
     const entry = scope.entries[p];
     if (!entry) return spec;
     // `fromFile` lands at `outDir/runtime/<rel>`, the entry at `outDir/<entry>`.
-    const fromOut = posix.join(
+    const fromOut = path.posix.join(
       '/out/runtime',
-      relative(scope.runtimeDir, dirname(fromFile)).split(sep).join('/'),
+      path
+        .relative(scope.runtimeDir, path.dirname(fromFile))
+        .split(path.sep)
+        .join('/'),
     );
-    return specifierOf(posix.relative(fromOut, posix.join('/out', entry)));
+    return specifierOf(
+      path.posix.relative(fromOut, path.posix.join('/out', entry)),
+    );
   };
   // `./x.js` written for `x.ts` (TS NodeNext style), or `./x.ts` itself.
-  const explicit = extname(bare);
+  const explicit = path.extname(bare);
   if (explicit && (await isFile(target))) {
     // A Sass import names the stylesheet the runtime build compiles it to (`./theme.scss` → `./theme.css`).
     const isSourceImport =
@@ -221,7 +227,7 @@ export async function specifierEdits(
       if (key !== 'source' || !src) visit(child);
   };
   visit(program.body);
-  const mapped = await Promise.all(found.map((item) => map(item.value)));
+  const mapped = await Promise.all(found.map(async (item) => map(item.value)));
   return found.flatMap((item, index) => {
     const next = mapped[index];
     return next !== undefined && next !== item.value
@@ -254,7 +260,7 @@ export async function rewriteImports(
 ): Promise<string> {
   return applyEdits(
     code,
-    await specifierEdits(code, 'js', (spec) =>
+    await specifierEdits(code, 'js', async (spec) =>
       rewriteSpecifier(spec, fromFile, scope),
     ),
   );
@@ -268,7 +274,7 @@ export async function rewriteDeclarationImports(
 ): Promise<string> {
   return applyEdits(
     code,
-    await specifierEdits(code, 'dts', (spec) =>
+    await specifierEdits(code, 'dts', async (spec) =>
       rewriteSpecifier(spec, fromFile, scope),
     ),
   );

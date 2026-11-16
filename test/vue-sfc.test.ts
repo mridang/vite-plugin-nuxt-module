@@ -12,17 +12,17 @@ import {
 const INSTALL_TRANSFORMER_PATTERN = /install vue-sfc-transformer/;
 const INDENTED_COMMENT_PATTERN = /^\/\* indented /;
 
-const { dirname, join } = nodePath;
-
 const directories: string[] = [];
 async function tree(files: Record<string, string>): Promise<string> {
   const root = await realpath(
-    await mkdtemp(join(tmpdir(), 'nuxt-plugin-test-')),
+    await mkdtemp(nodePath.join(tmpdir(), 'nuxt-plugin-test-')),
   );
   directories.push(root);
   for (const [path, content] of Object.entries(files)) {
-    await mkdir(dirname(join(root, path)), { recursive: true });
-    await writeFile(join(root, path), content);
+    await mkdir(nodePath.dirname(nodePath.join(root, path)), {
+      recursive: true,
+    });
+    await writeFile(nodePath.join(root, path), content);
   }
   return root;
 }
@@ -63,8 +63,8 @@ describe('dependencyChain', () => {
     });
     expect(await dependencyChain(root, ['builder', 'inner'])).toEqual([
       root,
-      join(root, 'node_modules/builder'),
-      join(root, 'node_modules/builder/node_modules/inner'),
+      nodePath.join(root, 'node_modules/builder'),
+      nodePath.join(root, 'node_modules/builder/node_modules/inner'),
     ]);
   });
 
@@ -75,7 +75,7 @@ describe('dependencyChain', () => {
     });
     expect(await dependencyChain(root, ['missing', 'inner'])).toEqual([
       root,
-      join(root, 'node_modules/inner'),
+      nodePath.join(root, 'node_modules/inner'),
     ]);
   });
 });
@@ -99,7 +99,7 @@ describe('vueTransformer', () => {
       ),
     });
     const loaded = await vueTransformer(root);
-    expect(loaded.vueLoader).toBe('own');
+    expect(loaded).toHaveProperty('vueLoader', 'own');
   });
 
   it('falls back to the copy nuxt-module-build reaches through its own dependencies', async () => {
@@ -116,7 +116,7 @@ describe('vueTransformer', () => {
       ),
     });
     const loaded = await vueTransformer(root);
-    expect(loaded.vueLoader).toBe('mkdist');
+    expect(loaded).toHaveProperty('vueLoader', 'mkdist');
   });
 });
 
@@ -142,11 +142,12 @@ describe('sfcSnippetLoader', () => {
     const root = await tree({ 'package.json': '{}', ...fakeSass });
     const [out] = await sfcSnippetLoader(root)({
       extension: '.scss',
-      srcPath: join(root, 'src/runtime/C.vue.scss'),
+      srcPath: nodePath.join(root, 'src/runtime/C.vue.scss'),
       getContents: () => 'a { b: c }',
     });
-    const scssUrl = new URL(`file://${join(root, 'src/runtime/C.vue.scss')}`)
-      .href;
+    const scssUrl = new URL(
+      `file://${nodePath.join(root, 'src/runtime/C.vue.scss')}`,
+    ).href;
     expect(out).toEqual({
       contents: `/* scss ${scssUrl} */ a { b: c }`,
       extension: '.css',

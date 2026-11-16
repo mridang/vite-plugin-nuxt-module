@@ -24,26 +24,24 @@ const NUXI_PREPARE_PATTERN = /nuxi prepare/;
 const CANNOT_EMIT_DECLARATIONS_PATTERN =
   /cannot emit declarations for the runtime/;
 
-const { join } = nodePath;
-
 /** A module root with `files` under it and a fake Sass that wraps the source in a comment. */
 async function moduleRoot(files: Record<string, string>): Promise<string> {
   const root = await withTools({ name: 'mod', type: 'module' }, {});
-  const sass = join(root, 'node_modules/sass');
+  const sass = nodePath.join(root, 'node_modules/sass');
   await mkdir(sass, { recursive: true });
   await writeFile(
-    join(sass, 'package.json'),
+    nodePath.join(sass, 'package.json'),
     JSON.stringify({ name: 'sass', type: 'module', exports: './index.js' }),
   );
   await writeFile(
-    join(sass, 'index.js'),
+    nodePath.join(sass, 'index.js'),
     'import { readFileSync } from "node:fs";\nexport const compile = (file) => ({ css: `/* compiled */ ${readFileSync(file, "utf8")}` });\nexport const compileString = () => ({ css: "" });\n',
   );
   for (const [name, text] of Object.entries(files)) {
-    await mkdir(join(root, name, '..'), { recursive: true });
-    await writeFile(join(root, name), text);
+    await mkdir(nodePath.join(root, name, '..'), { recursive: true });
+    await writeFile(nodePath.join(root, name), text);
   }
-  await writeFile(join(root, 'tsconfig.json'), '{}');
+  await writeFile(nodePath.join(root, 'tsconfig.json'), '{}');
   return root;
 }
 
@@ -57,7 +55,7 @@ describe('runtimeFiles', () => {
       'src/runtime/fixtures/d.ts': '',
     });
     expect(
-      await runtimeFiles(join(root, 'src/runtime'), ['fixtures/**']),
+      await runtimeFiles(nodePath.join(root, 'src/runtime'), ['fixtures/**']),
     ).toEqual(['a.ts']);
   });
 });
@@ -67,12 +65,12 @@ describe('buildRuntime', () => {
     buildRuntime({
       root,
       entry: {},
-      runtimeDir: join(root, 'src/runtime'),
+      runtimeDir: nodePath.join(root, 'src/runtime'),
       exclude: [],
       extension: '.mjs',
       dts: false,
-      tsconfig: join(root, 'tsconfig.json'),
-      outDir: join(root, 'dist'),
+      tsconfig: nodePath.join(root, 'tsconfig.json'),
+      outDir: nodePath.join(root, 'dist'),
     });
 
   it('compiles Sass to CSS like mkdist, leaving partials and source stylesheets out', async () => {
@@ -82,7 +80,7 @@ describe('buildRuntime', () => {
     });
     await build(root);
     expect([
-      await readdir(join(root, 'dist/runtime')),
+      await readdir(nodePath.join(root, 'dist/runtime')),
       await output(root, 'dist/runtime/style.css'),
     ]).toEqual([['style.css'], "/* compiled */ @use 'partial';"]);
   });
@@ -97,7 +95,7 @@ describe('buildRuntime', () => {
     await build(root);
     expect([
       await output(root, 'dist/runtime/plugin.js'),
-      await pathExists(join(root, 'dist/runtime/data.json')),
+      await pathExists(nodePath.join(root, 'dist/runtime/data.json')),
     ]).toEqual([expect.stringContaining('from "./lib/x.js"'), true]);
   });
 
@@ -113,17 +111,17 @@ describe('buildRuntime', () => {
 });
 
 describe('declarationRuntimeExternals', () => {
-  const resolveId = (root: string, id: string) =>
+  const resolveId = async (root: string, id: string) =>
     (
       (
-        declarationRuntimeExternals(join(root, 'src/runtime')) as {
+        declarationRuntimeExternals(nodePath.join(root, 'src/runtime')) as {
           resolveId: unknown;
         }
       ).resolveId as (
         id: string,
         importer: string,
       ) => Promise<{ id: string; external: boolean } | null>
-    )(id, join(root, 'src/index.ts'));
+    )(id, nodePath.join(root, 'src/index.ts'));
 
   it.each([['./runtime/composables/use'], ['./runtime/composables/use.js']])(
     'imports the runtime file %s is written for instead of inlining its types',
@@ -176,8 +174,8 @@ describe('runtimeImportTypes', () => {
     expect(
       await runtimeImportTypes(
         'export declare const a: () => import("../runtime/x").X;',
-        join(root, 'src/deep/a.d.ts'),
-        join(root, 'src/runtime'),
+        nodePath.join(root, 'src/deep/a.d.ts'),
+        nodePath.join(root, 'src/runtime'),
       ),
     ).toBe(
       'export declare const a: () => import("nuxt-module-runtime:x.js").X;',
@@ -211,8 +209,8 @@ describe('runtime imports of bundled entries', () => {
       { entry: { 'utils/a': 'src/deep/a.ts', other: 'src/other.ts' } },
       { build: { outDir: 'build/out' } },
     );
-    const out = join(root, 'build/out');
-    const chunks = await readdir(join(out, 'shared'));
+    const out = nodePath.join(root, 'build/out');
+    const chunks = await readdir(nodePath.join(out, 'shared'));
     const shared = chunks.find((f) => f.endsWith('.mjs')) ?? '';
     return { out, shared };
   };
@@ -244,7 +242,7 @@ describe('runtime imports of bundled entries', () => {
 
 /** A module package of `files` (a `package.json` unless given) that installs this package's own TypeScript. */
 async function tree(files: Record<string, string>): Promise<string> {
-  return await fixture(
+  return fixture(
     {
       'package.json': JSON.stringify({ name: 'mod', type: 'module' }),
       ...files,
@@ -291,18 +289,18 @@ async function buildPrepared(root: string, dts = false): Promise<void> {
   let tsconfig: string | undefined;
   await buildRuntime({
     root,
-    entry: { module: join(root, 'src/module.ts') },
-    runtimeDir: join(root, 'src/runtime'),
+    entry: { module: nodePath.join(root, 'src/module.ts') },
+    runtimeDir: nodePath.join(root, 'src/runtime'),
     exclude: [],
     extension: '.mjs',
     dts,
     tsconfig,
-    outDir: join(root, 'dist'),
+    outDir: nodePath.join(root, 'dist'),
   });
 }
 
 const built = async (root: string, file: string) =>
-  await output(root, join('dist/runtime', file));
+  output(root, nodePath.join('dist/runtime', file));
 
 describe('buildRuntime of a prepared module', () => {
   it("keeps a declared class field under a prepared module's tsconfig (useDefineForClassFields)", async () => {
@@ -346,7 +344,7 @@ describe('buildRuntime of a prepared module', () => {
     await buildPrepared(root);
     expect([
       await built(root, 'assets/main.css'),
-      await pathExists(join(root, 'dist/runtime/assets/main.scss')),
+      await pathExists(nodePath.join(root, 'dist/runtime/assets/main.scss')),
     ]).toEqual(['/* compiled main.scss */', false]);
   });
 
@@ -358,9 +356,9 @@ describe('buildRuntime of a prepared module', () => {
       'src/runtime/assets/main.scss': 'a { b: c }',
     });
     await buildPrepared(root);
-    expect(await pathExists(join(root, 'dist/runtime/assets/_vars.scss'))).toBe(
-      false,
-    );
+    expect(
+      await pathExists(nodePath.join(root, 'dist/runtime/assets/_vars.scss')),
+    ).toBe(false);
   });
 
   it("points a script's import of a runtime stylesheet at the compiled CSS", async () => {
