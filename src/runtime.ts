@@ -32,6 +32,11 @@ import {
 import { optionalTsconfig } from './nuxt-tsconfig.js';
 import { transformSfc } from './vue-sfc.js';
 
+const RELATIVE_SPECIFIER_PATTERN = /^\.\.?\//;
+const RELATIVE_OR_ROOT_SPECIFIER_PATTERN = /^\.\.?(\/|$)/;
+const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/;
+const SOURCE_MODULE_PATTERN = /\.(?:[cm]?tsx?|jsx)$/;
+
 const { dirname, join, posix, relative, resolve, sep } = path;
 
 /**
@@ -117,7 +122,7 @@ async function runtimeSource(
   id: string,
   importer: string,
 ): Promise<string | undefined> {
-  if (!/^\.\.?\//.test(id)) return undefined;
+  if (!RELATIVE_SPECIFIER_PATTERN.test(id)) return undefined;
   const target = resolve(dirname(importer), id);
   if (!target.startsWith(runtimeDir + sep)) return undefined;
   return sourceFileOf(target);
@@ -134,15 +139,19 @@ export async function renderRuntimeSpecifiers(
 ): Promise<{ code: string; map: string } | null> {
   if (!code.includes(RUNTIME_SPECIFIER)) return null;
   const lang = DECLARATION_RE.test(fileName) ? 'dts' : 'js';
-  const edits = await specifierEdits(code, lang, (specifier) => {
-    if (!specifier.startsWith(RUNTIME_SPECIFIER)) return undefined;
-    const file = specifier.slice(RUNTIME_SPECIFIER.length);
-    const path = posix.relative(
-      posix.dirname(fileName),
-      posix.join(RUNTIME_OUT_DIR, file),
-    );
-    return path.startsWith('.') ? path : `./${path}`;
-  });
+  const edits = await specifierEdits(
+    code,
+    lang,
+    (specifier): string | undefined => {
+      if (!specifier.startsWith(RUNTIME_SPECIFIER)) return undefined;
+      const file = specifier.slice(RUNTIME_SPECIFIER.length);
+      const path = posix.relative(
+        posix.dirname(fileName),
+        posix.join(RUNTIME_OUT_DIR, file),
+      );
+      return path.startsWith('.') ? path : `./${path}`;
+    },
+  );
   const s = new RolldownMagicString(code);
   for (const edit of edits) s.overwrite(edit.start, edit.end, edit.text);
   return { code: s.toString(), map: s.generateMap({ hires: true }).toString() };
@@ -192,7 +201,10 @@ export function nuxtRuntimeExternals(
       const dir = runtimeDir();
       if (!dir) return null;
       if (id.startsWith(RUNTIME_SPECIFIER)) return { id, external: true };
-      if (!importer || (!/^\.\.?\//.test(id) && !id.startsWith(dir)))
+      if (
+        !importer ||
+        (!RELATIVE_SPECIFIER_PATTERN.test(id) && !id.startsWith(dir))
+      )
         return null;
       // eslint-disable-next-line unicorn/no-this-outside-of-class -- a rollup plugin hook receives its plugin context as this
       const resolved = await this.resolve(id, importer, {
@@ -240,7 +252,9 @@ export function declarationRuntimeExternals(
     async resolveId(id: string, importer?: string) {
       // Like rollup-plugin-dts' default: types of any package (declared or not) are imported, never inlined.
       const isBare =
-        !/^\.\.?(\/|$)/.test(id) && !id.startsWith('/') && !id.startsWith('\0');
+        !RELATIVE_OR_ROOT_SPECIFIER_PATTERN.test(id) &&
+        !id.startsWith('/') &&
+        !id.startsWith('\0');
       if (importer && isBare && !id.startsWith(RUNTIME_SPECIFIER))
         return { id, external: true };
       return imports.resolveId(id, importer);
@@ -248,7 +262,8 @@ export function declarationRuntimeExternals(
     transform: {
       order: 'pre',
       async handler(code: string, id: string) {
-        if (!/\.d\.[cm]?ts$/.test(id) || !code.includes('import(')) return null;
+        if (!DECLARATION_FILE_PATTERN.test(id) || !code.includes('import('))
+          return null;
         // The declaration of `src/x.ts` is the module `src/x.d.ts`: its import types are relative to it.
         const next = await runtimeImportTypes(code, id, runtimeDir);
         return next === code ? null : { code: next };
@@ -275,13 +290,13 @@ export async function buildRuntime(o: RuntimeOptions): Promise<void> {
   const scripts: string[] = [];
   // The module's own tsconfig (its chain checked), so oxc honours what it sets: `useDefineForClassFields`, JSX.
   const tsconfig = await optionalTsconfig(o.root, o.tsconfig, o.dts);
-  for (const rel of files) {
-    const from = join(o.runtimeDir, rel);
-    const dest = join(out, runtimeOutName(rel));
-    await mkdir(dirname(dest), { recursive: true });
-    if (DECLARATION_RE.test(rel)) {
+  for (const relativeFile of files) {
+    const from = join(o.runtimeDir, relativeFile);
+    const destination = join(out, runtimeOutName(relativeFile));
+    await mkdir(dirname(destination), { recursive: true });
+    if (DECLARATION_RE.test(relativeFile)) {
       await writeFile(
-        dest,
+        destination,
         await rewriteRuntimeTypeAliases(
           await rewriteDeclarationImports(
             await readFile(from, 'utf8'),
@@ -290,9 +305,9 @@ export async function buildRuntime(o: RuntimeOptions): Promise<void> {
           ),
         ),
       );
-    } else if (SCRIPT_RE.test(rel)) {
+    } else if (SCRIPT_RE.test(relativeFile)) {
       const source = await readFile(from, 'utf8');
-      const { code } = /\.(?:[cm]?tsx?|jsx)$/.test(rel)
+      const { code } = SOURCE_MODULE_PATTERN.test(relativeFile)
         ? await transformWithOxc(source, from, {
             target: 'esnext',
             sourcemap: false,
@@ -304,14 +319,17 @@ export async function buildRuntime(o: RuntimeOptions): Promise<void> {
             },
           })
         : { code: source };
-      await writeFile(dest, await rewriteImports(code, from, scope));
+      await writeFile(destination, await rewriteImports(code, from, scope));
       scripts.push(from);
-    } else if (SASS_RE.test(rel)) {
-      await writeFile(dest, await compileSass(o.root, from, false));
-    } else if (rel.endsWith('.vue')) {
-      await writeFile(dest, await transformSfc(o.root, from, rel));
+    } else if (SASS_RE.test(relativeFile)) {
+      await writeFile(destination, await compileSass(o.root, from, false));
+    } else if (relativeFile.endsWith('.vue')) {
+      await writeFile(
+        destination,
+        await transformSfc(o.root, from, relativeFile),
+      );
     } else {
-      await writeFile(dest, await readFile(from));
+      await writeFile(destination, await readFile(from));
     }
   }
   if (o.dts) {

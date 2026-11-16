@@ -69,7 +69,7 @@ export async function packageTsconfig(
     resolve(root, name),
   );
   const present = await Promise.all(candidates.map((file) => exists(file)));
-  const own = candidates.find((_, i) => present[i]);
+  const own = candidates.find((_, index) => present[index]);
   if (own) return own;
   const ancestors: string[] = [];
   for (
@@ -79,5 +79,5 @@ export async function packageTsconfig(
   )
     ancestors.push(join(dir, PROJECT_TSCONFIG));
   const found = await Promise.all(ancestors.map((file) => exists(file)));
-  return ancestors.find((_, i) => found[i]);
+  return ancestors.find((_, index) => found[index]);
 }

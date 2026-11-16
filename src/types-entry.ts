@@ -127,14 +127,14 @@ export async function typesEntry(
     (hook.module === '#app' ? appShims : schemaShims).push(hook.shim);
   }
   const named = reexports
-    .filter((e) => !e.star)
+    .filter((reexport) => !reexport.star)
     .map(
-      (e) =>
-        `\nexport { ${e.names.map((n) => (n === 'default' ? '' : 'type ') + n).join(', ')} } from '${e.specifier ?? moduleFile}'`,
+      (reexport) =>
+        `\nexport { ${reexport.names.map((n) => (n === 'default' ? '' : 'type ') + n).join(', ')} } from '${reexport.specifier ?? moduleFile}'`,
     );
   const stars = reexports
-    .filter((e) => e.star)
-    .map((e) => `\nexport * from '${e.specifier ?? moduleFile}'`);
+    .filter((reexport) => reexport.star)
+    .map((reexport) => `\nexport * from '${reexport.specifier ?? moduleFile}'`);
   const text = `
   ${schemaImports.length > 0 ? `import type { ${schemaImports.join(', ')} } from '@nuxt/schema'` : ''}
 

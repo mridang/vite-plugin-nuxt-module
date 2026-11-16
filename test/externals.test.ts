@@ -11,6 +11,10 @@ import {
   packageMatcher,
 } from '../src/externals.js';
 
+const A_PREFIX_PATTERN = /^a/;
+const LIT_PATTERN = /^lit$/;
+const ANY_PATTERN = /.*/;
+
 async function packageRoot(pkg: Record<string, unknown>): Promise<string> {
   const root = await mkdtemp(nodePath.join(tmpdir(), 'vite-externals-'));
   await writeFile(nodePath.join(root, 'package.json'), JSON.stringify(pkg));
@@ -52,7 +56,7 @@ describe('matchesAny', () => {
     expect([
       matchesAny('a', ['a']),
       matchesAny('ab', ['a']),
-      matchesAny('ab', [/^a/]),
+      matchesAny('ab', [A_PREFIX_PATTERN]),
     ]).toEqual([true, false, true]);
   });
 });
@@ -85,7 +89,7 @@ describe('moduleExternals', () => {
 
   it('leaves out a declared dependency listed in bundle', async () => {
     expect(
-      matchesAny('lit', await moduleExternals(root, { bundle: [/^lit$/] })),
+      matchesAny('lit', await moduleExternals(root, { bundle: [LIT_PATTERN] })),
     ).toBe(false);
   });
 
@@ -99,7 +103,7 @@ describe('moduleExternals', () => {
     expect(
       matchesAny(
         'self-pkg/plain',
-        await moduleExternals(root, { bundle: [/.*/] }),
+        await moduleExternals(root, { bundle: [ANY_PATTERN] }),
       ),
     ).toBe(false);
   });
@@ -110,7 +114,10 @@ describe('moduleExternals', () => {
 
   it('keeps builtins external whatever bundle says', async () => {
     expect(
-      matchesAny('events', await moduleExternals(root, { bundle: [/.*/] })),
+      matchesAny(
+        'events',
+        await moduleExternals(root, { bundle: [ANY_PATTERN] }),
+      ),
     ).toBe(true);
   });
 });

@@ -255,7 +255,7 @@ function onClose(
     renderError() {
       outcome.failed = true;
     },
-    closeBundle() {
+    closeBundle(): Promise<void> | undefined {
       const resolved = config;
       if (!resolved) return undefined;
       // Under `--watch` the next rebuild can start before this step ends (Vite does not wait for

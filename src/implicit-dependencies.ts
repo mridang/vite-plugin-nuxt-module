@@ -5,9 +5,13 @@ import { matchesAny } from './externals.js';
 import type { ResolvedOptions } from './options.js';
 import { readPackageJson } from './package-json.js';
 
+const QUERY_OR_HASH_SUFFIX_PATTERN = /[?#].*/s;
+
 /** The package a module id inside `node_modules` belongs to (`…/node_modules/@a/b/x.js` → `@a/b`). */
 export function nodeModulesPackage(id: string): string | undefined {
-  const path = id.replace(/[?#].*/s, '').replaceAll('\\', '/');
+  const path = id
+    .replace(QUERY_OR_HASH_SUFFIX_PATTERN, '')
+    .replaceAll('\\', '/');
   const at = path.lastIndexOf('/node_modules/');
   if (at === -1) return undefined;
   const [scope = '', name = ''] = path

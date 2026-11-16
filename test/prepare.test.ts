@@ -12,12 +12,15 @@ import { afterEach, describe, expect, it } from '@jest/globals';
 
 import { PREPARE_OVERRIDES, prepareModule } from '../src/prepare.js';
 
-const dirs: string[] = [];
+const INSTALLED_IN_PATTERN = /installed in/;
+const MODULE_SETUP_FAILED_PATTERN = /module setup failed/;
+
+const directories: string[] = [];
 async function tree(files: Record<string, string>): Promise<string> {
   const root = await realpath(
     await mkdtemp(nodePath.join(tmpdir(), 'nuxt-prepare-test-')),
   );
-  dirs.push(root);
+  directories.push(root);
   for (const [path, content] of Object.entries(files)) {
     await mkdir(nodePath.dirname(nodePath.join(root, path)), {
       recursive: true,
@@ -27,7 +30,8 @@ async function tree(files: Record<string, string>): Promise<string> {
   return root;
 }
 afterEach(async () => {
-  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
+  for (const d of directories.splice(0))
+    await rm(d, { recursive: true, force: true });
 });
 
 /** A fake `@nuxt/cli` at `dir` that records how `prepare` was run (as `name`) and writes what it would. */
@@ -108,7 +112,7 @@ describe('prepareModule', () => {
   it('fails naming what to install without nuxi', async () => {
     const root = await tree({ 'package.json': '{}' });
     await expect(prepareModule(root, 'src/module.ts')).rejects.toThrow(
-      /installed in/,
+      INSTALLED_IN_PATTERN,
     );
   });
 
@@ -122,7 +126,7 @@ describe('prepareModule', () => {
       ),
     });
     await expect(prepareModule(root, 'src/module.ts')).rejects.toThrow(
-      /module setup failed/,
+      MODULE_SETUP_FAILED_PATTERN,
     );
   }, 30_000);
 });

@@ -18,6 +18,8 @@ import {
 import { finishedDeclarations } from './rendered.js';
 import { selfReferenceOptions } from './self-reference.js';
 
+const QUERY_SUFFIX_PATTERN = /\?.*/s;
+
 /** CSS module imports (`./x.module.css`): Vite turns them into an object of class names. */
 export const CSS_MODULE_IMPORT =
   /\.module\.(css|scss|sass|less|styl|stylus|pcss|postcss|sss)$/;
@@ -74,7 +76,7 @@ function declarationAssets(): RolldownPlugin {
       const suffix = assetSuffix(id);
       if (!suffix || !importer) return { id, external: true };
       return {
-        id: `${path.resolve(path.dirname(importer), id.replace(/\?.*/s, ''))}${suffix}`,
+        id: `${path.resolve(path.dirname(importer), id.replace(QUERY_SUFFIX_PATTERN, ''))}${suffix}`,
       };
     },
     load(id: string) {
@@ -113,7 +115,7 @@ export interface BundledTypesOptions {
   /** Hand `tsconfig` to rolldown too, instead of letting it discover the nearest one next to each file. */
   pinTsconfig?: boolean;
   /** Pattern for shared declaration chunks, per extension (default `[name]-[hash]<ext>`). */
-  chunkFileNames?: (ext: string) => string;
+  chunkFileNames?: (extension: string) => string;
   /** Write a `.d.mts.map` (`.d.ts.map`, ...) next to each declaration file (default on). */
   sourcemap?: boolean;
   /** Compiler options over the tsconfig's own (and over {@link CONSUMER_COMPILER_OPTIONS}). */
@@ -187,19 +189,21 @@ export async function emitBundledTypes(
         ...(o.eager ? { eager: true } : {}),
         // The shared context keeps every source it read until a `watchChange` this one-shot
         // build never sees: under `--watch` each rebuild would declare the first build's sources.
+        // eslint-disable-next-line unicorn/no-keyword-prefix -- the rolldown-plugin-dts option is named by the library
         newContext: true,
       }),
     ],
     onLog: failOnDeclarationWarnings(o.allowWarnings ?? []),
   });
-  for (const ext of o.exts) {
+  for (const extension of o.exts) {
     // Shared declaration chunks keep their real export names: mangled ones (`Oy`) would be what editors show
     // for every type that crosses a chunk boundary.
     const { output } = await bundle.write({
       dir: o.outDir,
       format: 'es',
-      entryFileNames: `[name]${ext}`,
-      chunkFileNames: o.chunkFileNames?.(ext) ?? `[name]-[hash]${ext}`,
+      entryFileNames: `[name]${extension}`,
+      chunkFileNames:
+        o.chunkFileNames?.(extension) ?? `[name]-[hash]${extension}`,
       sourcemap,
       minifyInternalExports: false,
     });

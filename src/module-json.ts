@@ -61,10 +61,10 @@ export async function writeModuleJson(o: {
 }): Promise<void> {
   const file = path.join(o.outDir, `module${o.extension}`);
   // eslint-disable-next-line no-unsanitized/method -- loads the module this build just wrote
-  const mod = (await import(
+  const loadedModule = (await import(
     `${pathToFileURL(file).href}?t=${Date.now()}`
   )) as ModuleExport;
-  const meta = (await mod.default?.getMeta?.()) ?? {};
+  const meta = (await loadedModule.default?.getMeta?.()) ?? {};
   const json = await moduleJson(
     meta,
     await readPackageJson(o.root),

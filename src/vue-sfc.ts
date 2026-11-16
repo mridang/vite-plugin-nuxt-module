@@ -7,6 +7,8 @@ import { packageSass } from './sass.js';
 import { importFromRoot, realPackageDirectory } from './resolve.js';
 import { SASS_RE } from './specifiers.js';
 
+const TS_MODULE_EXTENSION_PATTERN = /^\.(?:[cm]?ts|tsx)$/;
+
 const { join } = path;
 
 /**
@@ -71,7 +73,7 @@ export function sfcSnippetLoader(
       });
       return [{ contents: css, extension: '.css' }];
     }
-    if (!/^\.(?:[cm]?ts|tsx)$/.test(file.extension)) return [];
+    if (!TS_MODULE_EXTENSION_PATTERN.test(file.extension)) return [];
     const { code } = await transformWithOxc(
       await file.getContents(),
       `snippet${file.extension}`,
@@ -95,12 +97,12 @@ export function dependencyChain(
 ): Promise<string[]> {
   return chain.reduce<Promise<string[]>>(
     async (previous, name) => {
-      const dirs = await previous;
-      const from = dirs.at(-1) ?? root;
+      const directories = await previous;
+      const from = directories.at(-1) ?? root;
       const found =
         (await realPackageDirectory(name, from)) ??
         (from === root ? undefined : await realPackageDirectory(name, root));
-      return found ? [...dirs, found] : dirs;
+      return found ? [...directories, found] : directories;
     },
     Promise.resolve([root]),
   );
@@ -140,7 +142,7 @@ export function vueTransformer(root: string): Promise<VueLoader> {
 export async function transformSfc(
   root: string,
   from: string,
-  rel: string,
+  relativeFile: string,
 ): Promise<string> {
   const transformer = await vueTransformer(root);
   const [sfc] =
@@ -153,6 +155,7 @@ export async function transformSfc(
       },
       { options: { esbuild: {} }, loadFile: sfcSnippetLoader(root) },
     )) ?? [];
-  if (!sfc) throw new Error(`vue-sfc-transformer returned nothing for ${rel}`);
+  if (!sfc)
+    throw new Error(`vue-sfc-transformer returned nothing for ${relativeFile}`);
   return sfc.contents;
 }

@@ -88,16 +88,16 @@ describe('packageTsconfig', () => {
   };
 
   it('prefers tsconfig.lib.json, then tsconfig.json', async () => {
-    const withLib = await tree({
+    const withLibrary = await tree({
       'tsconfig.json': '{}',
       'tsconfig.lib.json': '{}',
     });
     const without = await tree({ 'tsconfig.json': '{}' });
     expect([
-      await packageTsconfig(withLib),
+      await packageTsconfig(withLibrary),
       await packageTsconfig(without),
     ]).toEqual([
-      join(withLib, 'tsconfig.lib.json'),
+      join(withLibrary, 'tsconfig.lib.json'),
       join(without, 'tsconfig.json'),
     ]);
   });

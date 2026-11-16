@@ -46,12 +46,17 @@ export async function missingTsconfigFile(
     },
   );
   if (missingReference) return missingReference;
-  const ext = json.extends;
-  const extended: unknown[] = Array.isArray(ext) ? ext : [ext];
-  return firstFound(extended, async (e) => {
-    if (typeof e !== 'string' || !(e.startsWith('.') || path.isAbsolute(e)))
+  const extension = json.extends;
+  const extended: unknown[] = Array.isArray(extension)
+    ? extension
+    : [extension];
+  return firstFound(extended, async (entry): Promise<string | undefined> => {
+    if (
+      typeof entry !== 'string' ||
+      !(entry.startsWith('.') || path.isAbsolute(entry))
+    )
       return undefined;
-    const p = path.resolve(path.dirname(file), e);
+    const p = path.resolve(path.dirname(file), entry);
     const target = (await isFile(p)) || p.endsWith('.json') ? p : `${p}.json`;
     return missingTsconfigFile(ts, target);
   });

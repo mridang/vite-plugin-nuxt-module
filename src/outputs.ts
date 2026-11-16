@@ -15,8 +15,8 @@ import { effectiveTsconfig } from './nuxt-tsconfig.js';
 import { writeTypesEntry } from './types-entry.js';
 
 /** Where shared chunks of the bundled module go, per extension (what `nuxt-module-build` writes). */
-export const sharedChunkFileNames = (ext: string): string =>
-  `shared/[name].[hash]${ext}`;
+export const sharedChunkFileNames = (extension: string): string =>
+  `shared/[name].[hash]${extension}`;
 
 /**
  * Packages a module's declaration names types from without depending on them: `defineNuxtModule()` returns
@@ -51,11 +51,11 @@ export async function hoistedTypePaths(
   root: string,
 ): Promise<Record<string, string[]>> {
   const paths: Record<string, string[]> = {};
-  const dirs = await Promise.all(
+  const directories = await Promise.all(
     NUXT_HOISTED_TYPES.map((name) => hoistedTypeDir(name, root)),
   );
-  for (const [i, name] of NUXT_HOISTED_TYPES.entries()) {
-    const dir = dirs[i];
+  for (const [index, name] of NUXT_HOISTED_TYPES.entries()) {
+    const dir = directories[index];
     if (!dir) continue;
     paths[name] = [dir];
     paths[`${name}/*`] = [`${dir}/*`];
@@ -91,7 +91,7 @@ export async function moduleDeclarationOptions(
         !own.includes(n) && Boolean(await realPackageDirectory(n, root)),
     ),
   );
-  const types = NUXT_HOISTED_TYPES.filter((_, i) => installed[i]);
+  const types = NUXT_HOISTED_TYPES.filter((_, index) => installed[index]);
   if (types.length > 0) result.types = [...own, ...types];
   const hoisted = await hoistedTypePaths(root);
   if (Object.keys(hoisted).length > 0) {

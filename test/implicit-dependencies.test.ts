@@ -15,12 +15,14 @@ import { IMPLICIT_DEPENDENCY } from '../src/defaults.js';
 import { nodeModulesPackage } from '../src/implicit-dependencies.js';
 import type { NuxtModuleOptions } from '../src/options.js';
 
-const dirs: string[] = [];
+const IMPLICIT_HELPER_PATTERN = /Implicitly bundling "helper"/;
+
+const directories: string[] = [];
 async function tree(files: Record<string, string>): Promise<string> {
   const root = await realpath(
     await mkdtemp(nodePath.join(tmpdir(), 'nuxt-implicit-test-')),
   );
-  dirs.push(root);
+  directories.push(root);
   for (const [path, content] of Object.entries(files)) {
     await mkdir(nodePath.dirname(nodePath.join(root, path)), {
       recursive: true,
@@ -30,11 +32,12 @@ async function tree(files: Record<string, string>): Promise<string> {
   return root;
 }
 afterEach(async () => {
-  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
+  for (const d of directories.splice(0))
+    await rm(d, { recursive: true, force: true });
 });
 
 /** A module importing `helper`, a package it lists only under `devDependencies`. */
-const moduleWithDevDependency = {
+const moduleWithDevelopmentDependency = {
   'package.json': JSON.stringify({
     name: 'mod',
     type: 'module',
@@ -71,12 +74,12 @@ describe('nodeModulesPackage', () => {
 describe('implicitDependencies', () => {
   it('fails a build that inlines a package the module does not depend on', async () => {
     await expect(
-      buildModule(await tree(moduleWithDevDependency)),
-    ).rejects.toThrow(/Implicitly bundling "helper"/);
+      buildModule(await tree(moduleWithDevelopmentDependency)),
+    ).rejects.toThrow(IMPLICIT_HELPER_PATTERN);
   }, 60_000);
 
   it('inlines it anyway when its warning code is allowed', async () => {
-    const root = await tree(moduleWithDevDependency);
+    const root = await tree(moduleWithDevelopmentDependency);
     await buildModule(root, { allowWarnings: [IMPLICIT_DEPENDENCY] });
     expect(
       await readFile(nodePath.join(root, 'dist/module.mjs'), 'utf8'),
@@ -84,7 +87,7 @@ describe('implicitDependencies', () => {
   }, 60_000);
 
   it('inlines a package listed in bundle', async () => {
-    const root = await tree(moduleWithDevDependency);
+    const root = await tree(moduleWithDevelopmentDependency);
     await buildModule(root, { bundle: ['helper'] });
     expect(
       await readFile(nodePath.join(root, 'dist/module.mjs'), 'utf8'),

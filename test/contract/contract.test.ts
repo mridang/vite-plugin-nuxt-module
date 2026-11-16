@@ -29,6 +29,10 @@ import {
 } from './harness.js';
 import { pathExists } from '../utils/fs.js';
 
+const NUXT_VERSION_PAGE_PATTERN = /data-test="nuxt">4\.\d+\.\d+\|true\|1</;
+const GREETINGS_PATTERN = /data-test="greetings">([^<]*)</;
+const SERVER_TIMING_PATTERN = /^hello;dur=\d+\.\d$/;
+
 const { join } = path;
 const work = workDirectory();
 const moduleDir = join(work, 'module');
@@ -131,11 +135,9 @@ describe('the module in a Nuxt app', () => {
     expect(html).toContain('data-test="plugin-template">Hello');
     expect(html).toContain('data-test="app-config">Hello Timing');
     expect(html).toContain('<title>Hello Timing</title>');
-    expect(html).toMatch(/data-test="nuxt">4\.\d+\.\d+\|true\|1</);
+    expect(html).toMatch(NUXT_VERSION_PAGE_PATTERN);
     // The module's own hook, the app's and the module's setup all add to the one list.
-    const greetings = /data-test="greetings">([^<]*)</
-      .exec(html)?.[1]
-      ?.split('|');
+    const greetings = GREETINGS_PATTERN.exec(html)?.[1]?.split('|');
     expect(greetings?.toSorted()).toEqual([
       'Hello, setup!',
       'from the app hook',
@@ -153,9 +155,10 @@ describe('the module in a Nuxt app', () => {
 
   it('links the stylesheets the plugin compiled from Sass', async () => {
     const html = await $fetch<string>('/');
-    const hrefs = [
-      ...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g),
-    ].map((m) => m[1]);
+    const hrefs = Array.from(
+      html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g),
+      (m) => m[1],
+    );
     const pages = await Promise.all(
       hrefs.map((href) => $fetch<string>(href ?? '')),
     );
@@ -196,7 +199,7 @@ describe('the module in a Nuxt app', () => {
       const response = await fetch(path);
       expect([path, response.headers.get('server-timing')]).toEqual([
         path,
-        expect.stringMatching(/^hello;dur=\d+\.\d$/),
+        expect.stringMatching(SERVER_TIMING_PATTERN),
       ]);
       expect(response.headers.get('x-hello-plugin')).toBe('1');
     }

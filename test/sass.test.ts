@@ -5,6 +5,8 @@ import { describe, expect, it } from '@jest/globals';
 
 import { compileSass, packageSass } from '../src/sass.js';
 
+const SASS_MISSING_PATTERN = /none of sass, sass-embedded is installed/;
+
 /** A package root with a fake Sass installed: `compile` reports the options it was called with. */
 async function withSass(name: string, source: string): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), 'nuxt-module-sass-'));
@@ -39,9 +41,7 @@ describe('packageSass', () => {
 
   it('fails naming both compilers when neither is installed', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'nuxt-module-sass-'));
-    await expect(packageSass(root)).rejects.toThrow(
-      /none of sass, sass-embedded is installed/,
-    );
+    await expect(packageSass(root)).rejects.toThrow(SASS_MISSING_PATTERN);
   });
 });
 

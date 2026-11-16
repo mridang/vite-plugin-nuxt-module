@@ -14,6 +14,17 @@ import {
 } from '../../src/declarations/bundle.js';
 import { pathExists } from '../utils/fs.js';
 
+const TYPE_ERROR_TS2322_PATTERN = /1 type error\(s\)[\s\S]*TS2322/;
+const DEP_PATTERN = /^dep/;
+const MISSING_NAMESPACE_PATTERN = /TS2503: Cannot find namespace/;
+const TEMPLATE_LIQUID_STRING_PATTERN =
+  /^(?![\s\S]*from ["']\.\/template\.liquid)[\s\S]*: string/;
+const DEP_TYPE_EXPORT_PATTERN = /^export type \* from "dep";$/m;
+const FX_PATTERN = /^fx($|\/)/;
+const STYLES_CONST_PATTERN =
+  /const (\w+): \{\s*readonly \[key: string\]: string;?\s*\};[\s\S]*\1 as styles/;
+const OWN_CODE_PATTERN = /OWN_CODE: careful/;
+
 const { join, resolve } = path;
 
 /** Writes the bundled declarations of `src/index.ts` of a fixture into its `dist`. */
@@ -83,7 +94,7 @@ describe('emitBundledTypes', () => {
       'tsconfig.json': FIXTURE_TSCONFIG,
       'src/index.ts': 'export const x: number = "s";\n',
     });
-    await expect(emit(root)).rejects.toThrow(/1 type error\(s\)[\s\S]*TS2322/);
+    await expect(emit(root)).rejects.toThrow(TYPE_ERROR_TS2322_PATTERN);
   }, 60_000);
 
   it('declares the sources as they are now when it runs again in the same process', async () => {
@@ -114,8 +125,8 @@ describe('emitBundledTypes', () => {
       },
       { link: ['typescript'] },
     );
-    await expect(emit(root, [/^dep/])).rejects.toThrow(
-      /TS2503: Cannot find namespace/,
+    await expect(emit(root, [DEP_PATTERN])).rejects.toThrow(
+      MISSING_NAMESPACE_PATTERN,
     );
   }, 60_000);
 
@@ -131,7 +142,7 @@ describe('emitBundledTypes', () => {
     });
     await emit(root);
     expect(await output(root, 'dist/index.d.mts')).toMatch(
-      /^(?![\s\S]*from ["']\.\/template\.liquid)[\s\S]*: string/,
+      TEMPLATE_LIQUID_STRING_PATTERN,
     );
   }, 60_000);
 });
@@ -154,9 +165,9 @@ describe('emitBundledTypes re-exports', () => {
       },
       { link: ['typescript'] },
     );
-    await emit(root, [/^dep/]);
+    await emit(root, [DEP_PATTERN]);
     expect(await output(root, 'dist/index.d.mts')).toMatch(
-      /^export type \* from "dep";$/m,
+      DEP_TYPE_EXPORT_PATTERN,
     );
   }, 60_000);
 
@@ -178,7 +189,7 @@ describe('emitBundledTypes re-exports', () => {
       'src/index.ts':
         'import type { SubT } from "fx/sub";\nexport const s = (x: SubT): string => x.s;\n',
     });
-    await emit(root, [/^fx($|\/)/], {
+    await emit(root, [FX_PATTERN], {
       entry: {
         index: join(root, 'src/index.ts'),
         'lib/sub': join(root, 'src/lib/sub.ts'),
@@ -208,7 +219,7 @@ describe('emitBundledTypes assets', () => {
     const root = await assetPackage();
     await emit(root);
     expect(await output(root, 'dist/index.d.mts')).toMatch(
-      /const (\w+): \{\s*readonly \[key: string\]: string;?\s*\};[\s\S]*\1 as styles/,
+      STYLES_CONST_PATTERN,
     );
   }, 60_000);
 
@@ -223,7 +234,7 @@ describe('emitBundledTypes assets', () => {
     const exists = await Promise.all(
       sources.map((source) => pathExists(resolve(root, 'dist', source))),
     );
-    expect(sources.filter((_, i) => !exists[i])).toEqual([]);
+    expect(sources.filter((_, index) => !exists[index])).toEqual([]);
   }, 60_000);
 });
 
@@ -251,7 +262,7 @@ describe('emitBundledTypes warnings', () => {
   it('fails on a plugin warning that is not allowed, naming its code', async () => {
     await expect(
       emit(await plain(), [], { plugins: [warning] }),
-    ).rejects.toThrow(/OWN_CODE: careful/);
+    ).rejects.toThrow(OWN_CODE_PATTERN);
   }, 60_000);
 });
 
@@ -297,9 +308,9 @@ describe('ASSET_IMPORT as rebuilt from its parts', () => {
       'x',
       '/',
     ];
-    for (let i = 0; i < 20_000; i += 1) {
+    for (let index = 0; index < 20_000; index += 1) {
       let specifier = '';
-      for (let j = 0; j < 5; j += 1) {
+      for (let index = 0; index < 5; index += 1) {
         specifier += pieces[Math.floor(random() * pieces.length)];
       }
       expect(ASSET_IMPORT.test(specifier)).toBe(old.test(specifier));

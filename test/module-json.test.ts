@@ -3,11 +3,12 @@ import { describe, expect, it } from '@jest/globals';
 
 import { builderMeta, moduleJson } from '../src/module-json.js';
 
+const SEMVER_PATTERN = /^\d+\.\d+\.\d+/;
+
 describe('builderMeta', () => {
   it('names this plugin and the Vite it built with', async () => {
     expect(await builderMeta()).toEqual({
-      '@mridang/vite-plugin-nuxt-module':
-        expect.stringMatching(/^\d+\.\d+\.\d+/),
+      '@mridang/vite-plugin-nuxt-module': expect.stringMatching(SEMVER_PATTERN),
       vite: viteVersion,
     });
   });
@@ -16,11 +17,7 @@ describe('builderMeta', () => {
 describe('moduleJson', () => {
   it("fills name and version from the package when the module's meta has none", async () => {
     expect(
-      await moduleJson(
-        { configKey: 'x' },
-        { name: 'pkg', version: '1.0.0' },
-        undefined,
-      ),
+      await moduleJson({ configKey: 'x' }, { name: 'pkg', version: '1.0.0' }),
     ).toMatchObject({ configKey: 'x', name: 'pkg', version: '1.0.0' });
   });
 

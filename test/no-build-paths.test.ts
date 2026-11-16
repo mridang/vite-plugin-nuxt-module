@@ -5,6 +5,8 @@ import {
   filesWithBuildPaths,
 } from '../src/no-build-paths.js';
 
+const MJS_A_PATTERN = /a\.mjs/;
+
 describe('filesWithBuildPaths', () => {
   it('names the files that contain the workspace path', () => {
     expect(
@@ -23,7 +25,7 @@ describe('assertNoBuildPaths', () => {
   it('fails on output that names the workspace path', () => {
     expect(() =>
       assertNoBuildPaths([['a.mjs', 'import "/repo/src/a.ts";']], '/repo'),
-    ).toThrow(/a\.mjs/);
+    ).toThrow(MJS_A_PATTERN);
   });
 
   it('accepts output with relative paths only', () => {

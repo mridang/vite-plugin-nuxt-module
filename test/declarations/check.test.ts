@@ -9,6 +9,10 @@ import {
   sourceTypeErrors,
 } from '../../src/declarations/check.js';
 
+const INDEX_TS2322_ERROR_PATTERN = /^src\/index\.ts\(1,14\): error TS2322/;
+const TS2688_PATTERN = /TS2688/;
+const DIST_TS2503_ERROR_PATTERN = /dist\/index\.d\.mts\(1,17\): error TS2503/;
+
 const { join } = path;
 
 /** The compiler options of {@link FIXTURE_TSCONFIG}. */
@@ -25,7 +29,7 @@ describe('sourceTypeErrors', () => {
       'src/index.ts': 'export const x: number = "s";\n',
     });
     expect(await sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual([
-      expect.stringMatching(/^src\/index\.ts\(1,14\): error TS2322/),
+      expect.stringMatching(INDEX_TS2322_ERROR_PATTERN),
     ]);
   });
 
@@ -50,7 +54,7 @@ describe('sourceTypeErrors', () => {
       'src/index.ts': 'export const x: number = 1;\n',
     });
     expect(await sourceTypeErrors(root, join(root, 'tsconfig.json'))).toEqual([
-      expect.stringMatching(/TS2688/),
+      expect.stringMatching(TS2688_PATTERN),
     ]);
   });
 
@@ -113,9 +117,7 @@ describe('declarationTypeErrors', () => {
         join(root, 'dist'),
         [join(root, 'dist/index.d.mts')],
       ),
-    ).toEqual([
-      expect.stringMatching(/dist\/index\.d\.mts\(1,17\): error TS2503/),
-    ]);
+    ).toEqual([expect.stringMatching(DIST_TS2503_ERROR_PATTERN)]);
   });
 
   it("leaves a dependency's own declarations to it", async () => {
