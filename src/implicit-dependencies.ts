@@ -1,11 +1,10 @@
-import type { Plugin } from 'vite';
-
 import { IMPLICIT_DEPENDENCY, PLUGIN_PREFIX } from './defaults.js';
 import { matchesAny } from './externals.js';
-import type { ResolvedOptions } from './options.js';
 import { readPackageJson } from './package-json.js';
+import type { ResolvedOptions } from './options.js';
+import type { Plugin } from 'vite';
 
-const QUERY_OR_HASH_SUFFIX_PATTERN = /[?#].*/s;
+const QUERY_OR_HASH_SUFFIX_PATTERN = /[?#].*/su;
 
 /** The package a module id inside `node_modules` belongs to (`…/node_modules/@a/b/x.js` → `@a/b`). */
 export function nodeModulesPackage(id: string): string | undefined {
@@ -13,7 +12,9 @@ export function nodeModulesPackage(id: string): string | undefined {
     .replace(QUERY_OR_HASH_SUFFIX_PATTERN, '')
     .replaceAll('\\', '/');
   const at = path.lastIndexOf('/node_modules/');
-  if (at === -1) return undefined;
+  if (at === -1) {
+    return undefined;
+  }
   const [scope = '', name = ''] = path
     .slice(at + '/node_modules/'.length)
     .split('/');
@@ -33,18 +34,26 @@ export function implicitDependencies(options: () => ResolvedOptions): Plugin {
     apply: 'build',
     enforce: 'pre',
     buildStart() {
+      // eslint-disable-next-line functional/immutable-data -- the plugin remembers which packages it has already reported
       reported.clear();
     },
     // Every module the bundle inlines is loaded; externals never are.
     async load(id) {
       const name = nodeModulesPackage(id);
-      if (!name || reported.has(name)) return;
+      if (!name || reported.has(name)) {
+        return;
+      }
       const { root, bundle } = options();
-      if (matchesAny(name, bundle)) return;
+      if (matchesAny(name, bundle)) {
+        return;
+      }
       // Marked before the manifest is read, so concurrent loads of one package warn once.
+      // eslint-disable-next-line functional/immutable-data -- the plugin remembers which packages it has already reported
       reported.add(name);
       const pkg = await readPackageJson(root);
-      if (name === pkg.name) return;
+      if (name === pkg.name) {
+        return;
+      }
       // eslint-disable-next-line unicorn/no-this-outside-of-class -- Rollup plugin hooks receive their context (this.warn) as `this`
       this.warn({
         code: IMPLICIT_DEPENDENCY,

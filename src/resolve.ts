@@ -2,11 +2,10 @@ import { readFile, realpath } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { exists } from './exists.js';
 import type TypeScript from 'typescript';
 
-import { exists } from './exists.js';
-
-const PACKAGE_SPECIFIER_PATTERN = /^((?:@[^/]+\/)?[^/]+)(\/.*)?$/;
+const PACKAGE_SPECIFIER_PATTERN = /^((?:@[^/]+\/)?[^/]+)(\/.*)?$/u;
 
 /** A `require` that resolves like code inside the package at `root`. */
 export function requireFrom(root: string): ReturnType<typeof createRequire> {
@@ -16,11 +15,14 @@ export function requireFrom(root: string): ReturnType<typeof createRequire> {
 /** The export conditions a tool is loaded through: how Node's ESM loader resolves it. */
 const IMPORT_CONDITIONS: readonly string[] = ['import', 'node', 'default'];
 
+/** A specifier's package name and the subpath (`.`, `./sub`) inside it. */
+export interface PackageSpecifier {
+  readonly name: string;
+  readonly subpath: string;
+}
+
 /** `specifier` split into its package name and subpath (`@scope/pkg/sub` → `@scope/pkg`, `./sub`). */
-export function packageSpecifier(specifier: string): {
-  name: string;
-  subpath: string;
-} {
+export function packageSpecifier(specifier: string): PackageSpecifier {
   const [, name = specifier, sub = ''] =
     PACKAGE_SPECIFIER_PATTERN.exec(specifier) ?? [];
   return { name, subpath: `.${sub}` };
@@ -34,21 +36,23 @@ function exportTarget(
   value: unknown,
   conditions: readonly string[] = IMPORT_CONDITIONS,
 ): string | undefined {
-  if (typeof value === 'string') return value;
+  if (typeof value === 'string') {
+    return value;
+  }
   if (Array.isArray(value)) {
-    for (const item of value) {
-      const target = exportTarget(item, conditions);
-      if (target !== undefined) return target;
-    }
+    return value
+      .values()
+      .map((item) => exportTarget(item, conditions))
+      .find((target) => target !== undefined);
+  }
+  if (!value || typeof value !== 'object') {
     return undefined;
   }
-  if (!value || typeof value !== 'object') return undefined;
-  for (const [condition, nested] of Object.entries(value)) {
-    if (!conditions.includes(condition)) continue;
-    const target = exportTarget(nested, conditions);
-    if (target !== undefined) return target;
-  }
-  return undefined;
+  return Object.entries(value)
+    .values()
+    .filter(([condition]) => conditions.includes(condition))
+    .map(([, nested]) => exportTarget(nested, conditions))
+    .find((target) => target !== undefined);
 }
 
 /**
@@ -69,22 +73,27 @@ export function exportsTarget(
     string,
     unknown
   >;
-  if (subpath in map) return exportTarget(map[subpath], conditions);
+  if (subpath in map) {
+    return exportTarget(map[subpath], conditions);
+  }
   const patterns = Object.keys(map)
     .filter((key) => key.includes('*'))
     .toSorted((a, b) => b.indexOf('*') - a.indexOf('*'));
-  for (const key of patterns) {
-    const [prefix = '', suffix = ''] = key.split('*');
-    if (
-      !subpath.startsWith(prefix) ||
-      !subpath.endsWith(suffix) ||
-      subpath.length < prefix.length + suffix.length
-    )
-      continue;
-    const match = subpath.slice(prefix.length, subpath.length - suffix.length);
-    return exportTarget(map[key], conditions)?.replaceAll('*', match);
+  const found = patterns
+    .values()
+    .map((key) => ({ key, parts: key.split('*') }))
+    .find(
+      ({ parts: [prefix = '', suffix = ''] }) =>
+        subpath.startsWith(prefix) &&
+        subpath.endsWith(suffix) &&
+        subpath.length >= prefix.length + suffix.length,
+    );
+  if (!found) {
+    return undefined;
   }
-  return undefined;
+  const [prefix = '', suffix = ''] = found.parts;
+  const match = subpath.slice(prefix.length, subpath.length - suffix.length);
+  return exportTarget(map[found.key], conditions)?.replaceAll('*', match);
 }
 
 /**
@@ -96,11 +105,15 @@ export async function packageDirectory(
   name: string,
   root: string,
 ): Promise<string | undefined> {
-  const candidates: string[] = [];
-  for (let dir = path.resolve(root); ; dir = path.dirname(dir)) {
-    candidates.push(path.join(dir, 'node_modules', name));
-    if (path.dirname(dir) === dir) break;
-  }
+  // `root` and each of its ancestors up to the filesystem root, nearest first.
+  const ancestors = new Set(
+    Array.from({ length: path.resolve(root).split(path.sep).length }, (_, up) =>
+      path.resolve(root, ...Array.from({ length: up }, () => '..')),
+    ),
+  );
+  const candidates = Array.from(ancestors, (dir) =>
+    path.join(dir, 'node_modules', name),
+  );
   const present = await Promise.all(
     candidates.map(async (candidate) =>
       exists(path.join(candidate, 'package.json')),
@@ -132,9 +145,12 @@ async function resolvePackageFile(
 ): Promise<string> {
   const { name, subpath } = packageSpecifier(specifier);
   const dir = await packageDirectory(name, root);
-  if (dir === undefined)
+  if (dir === undefined) {
     throw new Error(`cannot find package ${name} from ${root}`);
-  if (subpath === './package.json') return path.join(dir, 'package.json');
+  }
+  if (subpath === './package.json') {
+    return path.join(dir, 'package.json');
+  }
   const pkg = JSON.parse(
     await readFile(path.join(dir, 'package.json'), 'utf8'),
   ) as {
@@ -144,8 +160,9 @@ async function resolvePackageFile(
     const target =
       exportsTarget(pkg.exports, subpath) ??
       exportsTarget(pkg.exports, subpath, ['require', 'node', 'default']);
-    if (target === undefined)
+    if (target === undefined) {
       throw new Error(`${name} does not export ${subpath} (from ${root})`);
+    }
     return path.resolve(dir, target);
   }
   // No exports map: `main` (or `index.js`) of the directory, or the file a subpath names.

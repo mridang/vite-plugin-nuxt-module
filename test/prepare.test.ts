@@ -12,8 +12,8 @@ import { afterEach, describe, expect, it } from '@jest/globals';
 
 import { PREPARE_OVERRIDES, prepareModule } from '../src/prepare.js';
 
-const INSTALLED_IN_PATTERN = /installed in/;
-const MODULE_SETUP_FAILED_PATTERN = /module setup failed/;
+const INSTALLED_IN_PATTERN = /installed in/u;
+const MODULE_SETUP_FAILED_PATTERN = /module setup failed/u;
 
 const directories: string[] = [];
 async function tree(files: Record<string, string>): Promise<string> {
@@ -30,12 +30,13 @@ async function tree(files: Record<string, string>): Promise<string> {
   return root;
 }
 afterEach(async () => {
-  for (const d of directories.splice(0))
+  for (const d of directories.splice(0)) {
     await rm(d, { recursive: true, force: true });
+  }
 });
 
 /** A fake `@nuxt/cli` at `dir` that records how `prepare` was run (as `name`) and writes what it would. */
-function fakeCli(dir: string, name: string, body = ''): Record<string, string> {
+function fakeCli(dir: string, name: string, body = '') {
   return {
     [`${dir}/package.json`]: JSON.stringify({
       name: '@nuxt/cli',

@@ -4,7 +4,8 @@ import path from 'node:path';
 import { NUXT_BUILD_DIR, PROJECT_TSCONFIG } from './defaults.js';
 import { exists, firstFound } from './exists.js';
 import { anyTypeScript } from './resolve.js';
-import { packageTsconfig, type TS } from './tsconfig.js';
+import { packageTsconfig } from './tsconfig.js';
+import type { TS } from './tsconfig.js';
 
 interface TsconfigJson {
   readonly references?: readonly { readonly path: string }[];
@@ -26,12 +27,15 @@ export async function missingTsconfigFile(
   ts: TS,
   file: string,
 ): Promise<string | undefined> {
-  if (!(await isFile(file))) return file;
+  if (!(await isFile(file))) {
+    return file;
+  }
   const read = ts.readConfigFile(file, ts.sys.readFile.bind(ts.sys));
-  if (read.error)
+  if (read.error) {
     throw new Error(
       `cannot read ${file}: ${ts.flattenDiagnosticMessageText(read.error.messageText, '\n')}`,
     );
+  }
   const json = (read.config ?? {}) as TsconfigJson;
   const missingReference = await firstFound(
     json.references ?? [],
@@ -45,7 +49,9 @@ export async function missingTsconfigFile(
       return found.some(Boolean) ? undefined : p;
     },
   );
-  if (missingReference) return missingReference;
+  if (missingReference) {
+    return missingReference;
+  }
   const extension = json.extends;
   const extended: unknown[] = Array.isArray(extension)
     ? extension
@@ -54,8 +60,9 @@ export async function missingTsconfigFile(
     if (
       typeof entry !== 'string' ||
       !(entry.startsWith('.') || path.isAbsolute(entry))
-    )
+    ) {
       return undefined;
+    }
     const p = path.resolve(path.dirname(file), entry);
     const target = (await isFile(p)) || p.endsWith('.json') ? p : `${p}.json`;
     return missingTsconfigFile(ts, target);
@@ -87,10 +94,13 @@ export async function effectiveTsconfig(
   tsconfig: string | undefined,
 ): Promise<string> {
   const base = await packageTsconfig(root, tsconfig);
-  if (!base)
+  if (!base) {
     throw new Error(`nuxtModule: no tsconfig found in ${root} or above it`);
+  }
   const missing = await missingTsconfigFile(await anyTypeScript(root), base);
-  if (missing) throw new Error(brokenTsconfigMessage(root, base, missing));
+  if (missing) {
+    throw new Error(brokenTsconfigMessage(root, base, missing));
+  }
   return base;
 }
 
@@ -104,6 +114,8 @@ export async function optionalTsconfig(
   required: boolean,
 ): Promise<string | undefined> {
   const base = await packageTsconfig(root, tsconfig);
-  if (!required && (!base || !(await exists(base)))) return undefined;
+  if (!required && (!base || !(await exists(base)))) {
+    return undefined;
+  }
   return effectiveTsconfig(root, tsconfig);
 }

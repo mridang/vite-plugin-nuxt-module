@@ -1,17 +1,17 @@
 import nodePath from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
-import { FIXTURE_TSCONFIG, fixture, output } from './utils/fixture.js';
 import {
   declarationCompilerOptions,
   declarationFileOf,
   emitRuntimeDeclarations,
   rewriteRuntimeTypeAliases,
 } from '../src/runtime-declarations.js';
+import { FIXTURE_TSCONFIG, fixture, output } from './utils/fixture.js';
 
-const LIB_X_IMPORT_PATTERN = /from ["']\.\/lib\/x\.js["']/;
+const LIB_X_IMPORT_PATTERN = /from ["']\.\/lib\/x\.js["']/u;
 const UNRESOLVED_IMPORTS_PATTERN =
-  /cannot resolve[\s\S]*#imports[\s\S]*prepare: true/;
+  /cannot resolve[\s\S]*#imports[\s\S]*prepare: true/u;
 
 describe('declarationFileOf', () => {
   it.each([
@@ -80,20 +80,17 @@ describe('emitRuntimeDeclarations', () => {
       },
       { link },
     );
-  const emit = async (root: string, scripts: string[], vues: string[] = []) => {
-    let tsconfig: string | undefined;
-    return emitRuntimeDeclarations(
+  const emit = async (root: string, scripts: string[], vues: string[] = []) =>
+    emitRuntimeDeclarations(
       {
         root,
         runtimeDir: nodePath.join(root, 'src/runtime'),
         outDir: nodePath.join(root, 'dist'),
-        tsconfig,
         scope: { runtimeDir: nodePath.join(root, 'src/runtime'), entries: {} },
       },
       scripts.map((f) => nodePath.join(root, f)),
       vues.map((f) => nodePath.join(root, f)),
     );
-  };
 
   it('declares every runtime script, with explicit extensions', async () => {
     const root = await module({

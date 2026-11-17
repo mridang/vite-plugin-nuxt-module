@@ -11,9 +11,9 @@ import {
   packageMatcher,
 } from '../src/externals.js';
 
-const A_PREFIX_PATTERN = /^a/;
-const LIT_PATTERN = /^lit$/;
-const ANY_PATTERN = /.*/;
+const A_PREFIX_PATTERN = /^a/u;
+const LIT_PATTERN = /^lit$/u;
+const ANY_PATTERN = /.*/u;
 
 async function packageRoot(pkg: Record<string, unknown>): Promise<string> {
   const root = await mkdtemp(nodePath.join(tmpdir(), 'vite-externals-'));
@@ -35,9 +35,12 @@ describe('declaredDependencies', () => {
 
 describe('escapeRegExp', () => {
   it('matches the text literally', () => {
-    expect(
-      new RegExp(`^${escapeRegExp('@scope/a.b+c')}$`).test('@scope/a.b+c'),
-    ).toBe(true);
+    const pattern = new RegExp(`^${escapeRegExp('@scope/a.b+c')}$`, 'u');
+    expect([
+      escapeRegExp('@scope/a.b+c'),
+      pattern.test('@scope/a.b+c'),
+      pattern.test('@scope/aXb+c'),
+    ]).toEqual([String.raw`@scope\/a\.b\+c`, true, false]);
   });
 });
 
@@ -79,11 +82,11 @@ describe('moduleExternals', () => {
       list[3],
       String(list[4]),
     ]).toEqual([
-      String.raw`/^lit(\/|$)/`,
-      String.raw`/^dompurify(\/|$)/`,
-      String.raw`/^self-pkg(\/|$)/`,
+      String.raw`/^lit(\/|$)/u`,
+      String.raw`/^dompurify(\/|$)/u`,
+      String.raw`/^self-pkg(\/|$)/u`,
       'extra',
-      '/^node:/',
+      '/^node:/u',
     ]);
   });
 

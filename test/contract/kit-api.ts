@@ -22,7 +22,7 @@ const DEV_ONLY =
 const CONSTANT =
   'a constant or path helper, with nothing to observe in a running app';
 
-export const KIT_API: Readonly<Record<string, KitCoverage>> = {
+export const KIT_API = {
   DEFAULT_JSX_FILE_EXTENSIONS: { excluded: CONSTANT },
   DEFAULT_JS_FILE_EXTENSIONS: { excluded: CONSTANT },
   addBuildPlugin: {
@@ -161,4 +161,4 @@ export const KIT_API: Readonly<Record<string, KitCoverage>> = {
     excluded: 'reads the config at build time; the module writes it instead',
   },
   writeTypes: { excluded: BUILD_TOOL },
-};
+} satisfies Readonly<Record<string, KitCoverage>>;

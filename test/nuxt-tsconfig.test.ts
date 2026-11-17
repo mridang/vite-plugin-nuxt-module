@@ -2,18 +2,18 @@ import nodePath from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from '@jest/globals';
 
-import { fixture } from './utils/fixture.js';
 import {
   effectiveTsconfig,
   missingTsconfigFile,
   optionalTsconfig,
 } from '../src/nuxt-tsconfig.js';
+import { fixture } from './utils/fixture.js';
 
-const CANNOT_READ_PATTERN = /cannot read/;
-const NUXI_PREPARE_PATTERN = /nuxi prepare/;
-const BASE_JSON_MISSING_PATTERN = /base\.json, which does not exist/;
+const CANNOT_READ_PATTERN = /cannot read/u;
+const NUXI_PREPARE_PATTERN = /nuxi prepare/u;
+const BASE_JSON_MISSING_PATTERN = /base\.json, which does not exist/u;
 const BUILD_TSCONFIG_MISSING_PATTERN =
-  /tsconfig\.build\.json, which does not exist/;
+  /tsconfig\.build\.json, which does not exist/u;
 
 /** A module root holding `files`, with TypeScript installed. */
 const tree = async (files: Record<string, string>): Promise<string> =>

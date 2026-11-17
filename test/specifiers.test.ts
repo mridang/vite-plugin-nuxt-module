@@ -28,8 +28,9 @@ async function tree(files: Record<string, string>): Promise<string> {
   return root;
 }
 afterEach(async () => {
-  for (const d of directories.splice(0))
+  for (const d of directories.splice(0)) {
     await rm(d, { recursive: true, force: true });
+  }
 });
 
 const layout = {

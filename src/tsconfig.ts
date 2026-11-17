@@ -1,8 +1,8 @@
 import path from 'node:path';
-import type TypeScript from 'typescript';
 
 import { LIB_TSCONFIG, PROJECT_TSCONFIG } from './defaults.js';
 import { exists } from './exists.js';
+import type TypeScript from 'typescript';
 
 /** The TypeScript compiler module (the package's own, see `packageTypeScript`). */
 export type TS = typeof TypeScript;
@@ -25,7 +25,9 @@ export function parsedTsconfig(
       );
     },
   });
-  if (!parsed) throw new Error(`cannot read ${tsconfig}`);
+  if (!parsed) {
+    throw new Error(`cannot read ${tsconfig}`);
+  }
   return parsed;
 }
 
@@ -62,7 +64,9 @@ export async function packageTsconfig(
   root: string,
   tsconfig?: string,
 ): Promise<string | undefined> {
-  if (tsconfig) return path.resolve(root, tsconfig);
+  if (tsconfig) {
+    return path.resolve(root, tsconfig);
+  }
   const candidates = [LIB_TSCONFIG, PROJECT_TSCONFIG].map((name) =>
     path.resolve(root, name),
   );
@@ -70,14 +74,19 @@ export async function packageTsconfig(
     candidates.map(async (file) => exists(file)),
   );
   const own = candidates.find((_, index) => present[index]);
-  if (own) return own;
-  const ancestors: string[] = [];
-  for (
-    let dir = path.dirname(path.resolve(root));
-    dir !== path.dirname(dir);
-    dir = path.dirname(dir)
+  if (own) {
+    return own;
+  }
+  // Each ancestor of `root` below the filesystem root, nearest first.
+  const ancestors = new Set(
+    Array.from({ length: path.resolve(root).split(path.sep).length }, (_, up) =>
+      path.resolve(root, ...Array.from({ length: up + 1 }, () => '..')),
+    ),
   )
-    ancestors.push(path.join(dir, PROJECT_TSCONFIG));
+    .values()
+    .filter((dir) => dir !== path.dirname(dir))
+    .map((dir) => path.join(dir, PROJECT_TSCONFIG))
+    .toArray();
   const found = await Promise.all(ancestors.map(async (file) => exists(file)));
   return ancestors.find((_, index) => found[index]);
 }

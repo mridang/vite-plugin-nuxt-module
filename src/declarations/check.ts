@@ -1,10 +1,4 @@
 import path from 'node:path';
-import type {
-  CompilerOptions,
-  Diagnostic,
-  FormatDiagnosticsHost,
-  ParsedCommandLine,
-} from 'typescript';
 
 import {
   CONSUMER_COMPILER_OPTIONS,
@@ -14,7 +8,14 @@ import {
 import { posixPath } from '../entries.js';
 import { matchesAnyGlob } from '../glob.js';
 import { packageTypeScript } from '../resolve.js';
-import { parsedTsconfig, type TS } from '../tsconfig.js';
+import { parsedTsconfig } from '../tsconfig.js';
+import type { TS } from '../tsconfig.js';
+import type {
+  CompilerOptions,
+  Diagnostic,
+  FormatDiagnosticsHost,
+  ParsedCommandLine,
+} from 'typescript';
 
 /** `diagnostics` that are errors, formatted relative to `root`. */
 function errors(
@@ -28,8 +29,10 @@ function errors(
     getNewLine: () => '\n',
   };
   return diagnostics
+    .values()
     .filter((d) => d.category === ts.DiagnosticCategory.Error)
-    .map((d) => ts.formatDiagnostic(d, host).trimEnd());
+    .map((d) => ts.formatDiagnostic(d, host).trimEnd())
+    .toArray();
 }
 
 /** Compiler options a declaration step overrides on top of a tsconfig's. */
@@ -120,13 +123,19 @@ export async function declarationTypeErrors(
   files: readonly string[],
   overrides: CompilerOverrides = {},
 ): Promise<string[]> {
-  if (files.length === 0) return [];
+  if (files.length === 0) {
+    return [];
+  }
   const ts = await packageTypeScript(root);
   const { options } = checkedProject(ts, tsconfig, overrides);
-  const emitOptions: CompilerOptions = { ...options, skipLibCheck: false };
-  delete emitOptions.rootDir;
-  delete emitOptions.declarationDir;
-  delete emitOptions.outDir;
+  const emitOptions = {
+    ...Object.fromEntries(
+      Object.entries(options).filter(
+        ([key]) => !['rootDir', 'declarationDir', 'outDir'].includes(key),
+      ),
+    ),
+    skipLibCheck: false,
+  } as CompilerOptions;
   const program = ts.createProgram(files, emitOptions);
   const own = program
     .getSourceFiles()

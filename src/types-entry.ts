@@ -37,35 +37,32 @@ async function scanExports(declaration: string): Promise<{
 }> {
   const { program } = await parse('module.ts', declaration, { lang: 'ts' });
   const statements: unknown = program.body;
-  const names = new Set<string>();
-  const reexports: Reexport[] = [];
-  for (const node of statements as readonly Statement[]) {
-    if (node.type === 'ExportNamedDeclaration') {
-      const id =
-        node.declaration?.id?.name ??
-        node.declaration?.declarations?.[0]?.id?.name;
-      if (id) {
-        names.add(id);
-        reexports.push({ names: [id], star: false });
+  const reexports = (statements as readonly Statement[]).flatMap(
+    (node): Reexport[] => {
+      if (node.type === 'ExportNamedDeclaration') {
+        const id =
+          node.declaration?.id?.name ??
+          node.declaration?.declarations?.[0]?.id?.name;
+        return [
+          ...(id ? [{ names: [id], star: false }] : []),
+          ...(node.specifiers ?? []).map((s) => ({
+            names: [s.exported.name ?? s.exported.value ?? ''],
+            star: false,
+            ...(node.source ? { specifier: node.source.value } : {}),
+          })),
+        ];
       }
-      for (const s of node.specifiers ?? []) {
-        const exported = s.exported.name ?? s.exported.value ?? '';
-        names.add(exported);
-        reexports.push({
-          names: [exported],
-          star: false,
-          ...(node.source ? { specifier: node.source.value } : {}),
-        });
+      if (node.type === 'ExportDefaultDeclaration') {
+        return [{ names: ['default'], star: false }];
       }
-    } else if (node.type === 'ExportDefaultDeclaration') {
-      names.add('default');
-      reexports.push({ names: ['default'], star: false });
-    } else if (node.type === 'ExportAllDeclaration' && node.source) {
-      reexports.push({ names: [], star: true, specifier: node.source.value });
-    } else {
+      if (node.type === 'ExportAllDeclaration' && node.source) {
+        return [{ names: [], star: true, specifier: node.source.value }];
+      }
       // Other statements add no export name for the scan to record.
-    }
-  }
+      return [];
+    },
+  );
+  const names = new Set(reexports.flatMap((reexport) => reexport.names));
   return { names, reexports };
 }
 
@@ -107,23 +104,24 @@ export async function typesEntry(
   moduleFile: string,
 ): Promise<string> {
   const { names, reexports } = await scanExports(declaration);
-  const schemaImports: string[] = [];
-  const moduleImports: string[] = [];
-  const appShims: string[] = [];
-  const schemaShims: string[] = [];
-  const moduleExports: string[] = [];
-  if (!names.has('ModuleOptions')) {
-    schemaImports.push('NuxtModule');
-    moduleImports.push('default as Module');
-    moduleExports.push(
-      'export type ModuleOptions = typeof Module extends NuxtModule<infer O> ? Partial<O> : Record<string, any>',
-    );
-  }
-  for (const hook of HOOKS) {
-    if (!names.has(hook.name)) continue;
-    moduleImports.push(hook.name);
-    (hook.module === '#app' ? appShims : schemaShims).push(hook.shim);
-  }
+  const declaresOptions = names.has('ModuleOptions');
+  const hooks = HOOKS.filter((hook) => names.has(hook.name));
+  const schemaImports = declaresOptions ? [] : ['NuxtModule'];
+  const moduleImports = [
+    ...(declaresOptions ? [] : ['default as Module']),
+    ...hooks.map((hook) => hook.name),
+  ];
+  const appShims = hooks.flatMap((hook) =>
+    hook.module === '#app' ? [hook.shim] : [],
+  );
+  const schemaShims = hooks.flatMap((hook) =>
+    hook.module === '#app' ? [] : [hook.shim],
+  );
+  const moduleExports = declaresOptions
+    ? []
+    : [
+        'export type ModuleOptions = typeof Module extends NuxtModule<infer O> ? Partial<O> : Record<string, any>',
+      ];
   const named = reexports
     .filter((reexport) => !reexport.star)
     .map(
@@ -144,7 +142,7 @@ ${moduleExports.length > 0 ? `\n${moduleExports.join('\n')}` : ''}
 ${named.join('')}
 ${stars.join('')}
 `;
-  return `${text.trim().replaceAll(/[\n\r]{3,}/g, '\n\n')}\n`;
+  return `${text.trim().replaceAll(/[\n\r]{3,}/gu, '\n\n')}\n`;
 }
 
 /**
@@ -159,7 +157,9 @@ export async function writeTypesEntry(
   const mjs = extension === '.mjs';
   // Paired with the module's own declaration extension: `module.mjs` → `types.d.mts`, `module.js` → `types.d.ts`.
   const file = path.join(outDir, mjs ? 'types.d.mts' : 'types.d.ts');
-  if ((await exists(file)) || !(await namesFile(root, file))) return;
+  if ((await exists(file)) || !(await namesFile(root, file))) {
+    return;
+  }
   const declaration = await readFile(
     path.join(outDir, mjs ? 'module.d.mts' : 'module.d.ts'),
     'utf8',

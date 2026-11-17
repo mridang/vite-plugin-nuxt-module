@@ -3,26 +3,26 @@ import nodePath from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
 import {
-  buildFixture,
-  FIXTURE_TSCONFIG,
-  fixture,
-  output,
-  withTools,
-} from './utils/fixture.js';
-import {
   buildRuntime,
   declarationRuntimeExternals,
   renderRuntimeSpecifiers,
   runtimeFiles,
   runtimeImportTypes,
 } from '../src/runtime.js';
+import {
+  buildFixture,
+  FIXTURE_TSCONFIG,
+  fixture,
+  output,
+  withTools,
+} from './utils/fixture.js';
 import { pathExists } from './utils/fs.js';
 
-const RUNTIME_X_IMPORT_PATTERN = /from ["']\.\.\/runtime\/x\.js["']/;
-const COUNT_STATEMENT_PATTERN = /^[ \t]*count;$/m;
-const NUXI_PREPARE_PATTERN = /nuxi prepare/;
+const RUNTIME_X_IMPORT_PATTERN = /from ["']\.\.\/runtime\/x\.js["']/u;
+const COUNT_STATEMENT_PATTERN = /^[ \t]*count;$/mu;
+const NUXI_PREPARE_PATTERN = /nuxi prepare/u;
 const CANNOT_EMIT_DECLARATIONS_PATTERN =
-  /cannot emit declarations for the runtime/;
+  /cannot emit declarations for the runtime/u;
 
 /** A module root with `files` under it and a fake Sass that wraps the source in a comment. */
 async function moduleRoot(files: Record<string, string>): Promise<string> {
@@ -35,6 +35,7 @@ async function moduleRoot(files: Record<string, string>): Promise<string> {
   );
   await writeFile(
     nodePath.join(sass, 'index.js'),
+    // eslint-disable-next-line no-template-curly-in-string -- source text of a fixture module, not a template of this file
     'import { readFileSync } from "node:fs";\nexport const compile = (file) => ({ css: `/* compiled */ ${readFileSync(file, "utf8")}` });\nexport const compileString = () => ({ css: "" });\n',
   );
   for (const [name, text] of Object.entries(files)) {
@@ -282,11 +283,11 @@ const fakeSass = {
     exports: { '.': './index.mjs' },
   }),
   'node_modules/sass/index.mjs':
+    // eslint-disable-next-line no-template-curly-in-string -- source text of a fixture module, not a template of this file
     'import { basename } from "node:path";\nexport const compile = (file) => ({ css: `/* compiled ${basename(file)} */` });\nexport const compileString = () => ({ css: "" });\n',
 };
 
 async function buildPrepared(root: string, dts = false): Promise<void> {
-  let tsconfig: string | undefined;
   await buildRuntime({
     root,
     entry: { module: nodePath.join(root, 'src/module.ts') },
@@ -294,7 +295,6 @@ async function buildPrepared(root: string, dts = false): Promise<void> {
     exclude: [],
     extension: '.mjs',
     dts,
-    tsconfig,
     outDir: nodePath.join(root, 'dist'),
   });
 }

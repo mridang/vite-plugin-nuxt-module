@@ -7,15 +7,9 @@ import {
 } from 'node:fs/promises';
 import nodePath from 'node:path';
 import { setTimeout } from 'node:timers/promises';
-import { createLogger, type Logger } from 'vite';
+import { createLogger } from 'vite';
 import { describe, expect, it } from '@jest/globals';
 
-import {
-  buildFixture,
-  fixture,
-  watchFixture,
-  withTools,
-} from './utils/fixture.js';
 import {
   hoistedTypePaths,
   moduleDeclarationOptions,
@@ -23,7 +17,14 @@ import {
   sharedChunkFileNames,
   writeCompatibleDeclarations,
 } from '../src/outputs.js';
+import {
+  buildFixture,
+  fixture,
+  watchFixture,
+  withTools,
+} from './utils/fixture.js';
 import { pathExists } from './utils/fs.js';
+import type { Logger } from 'vite';
 
 /** A module package of `files` that installs this package's own TypeScript, as the declaration steps type with it. */
 const tree = async (files: Record<string, string>): Promise<string> =>
@@ -123,7 +124,9 @@ async function until(
 ): Promise<void> {
   const deadline = Date.now() + ms;
   while (!(await done())) {
-    if (Date.now() > deadline) throw new Error('timed out');
+    if (Date.now() > deadline) {
+      throw new Error('timed out');
+    }
     await setTimeout(100);
   }
 }
@@ -242,24 +245,18 @@ describe('writeCompatibleDeclarations', () => {
 describe('nuxtModuleOutputs', () => {
   it('writes nothing after a failed build', async () => {
     const root = await withTools({ name: 'mod' }, {});
-    let runtimeDir: string | undefined;
-    let target: string | undefined;
-    let moduleMeta: Readonly<Record<string, unknown>> | undefined;
     const plugin = nuxtModuleOutputs(() => ({
       root,
       sourceRoot: 'src',
       entry: { module: nodePath.join(root, 'src/module.ts') },
-      runtimeDir,
       runtimeExclude: [],
       external: [],
       bundle: [],
       extension: '.mjs',
-      target,
       dts: true,
       compatible: false,
       eager: false,
       tsconfig: nodePath.join(root, 'tsconfig.json'),
-      moduleMeta,
       prepare: false,
       sourcemap: false,
       allowWarnings: [],
@@ -328,7 +325,9 @@ describe('nuxtModuleOutputs', () => {
         `${starterModule['src/module.ts']}export const fixed = 1;\n`,
       );
       await until(async () => {
-        if (!(await pathExists(declaration))) return false;
+        if (!(await pathExists(declaration))) {
+          return false;
+        }
         const text = await readFile(declaration, 'utf8');
         return text.includes('fixed');
       });

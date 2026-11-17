@@ -1,17 +1,18 @@
-import type { Plugin } from 'vite';
 import { searchForWorkspaceRoot } from 'vite';
 
 import { PLUGIN_PREFIX } from './defaults.js';
 import { posixPath } from './entries.js';
+import type { Plugin } from 'vite';
 
 /** The files among `files` (name, text) whose text names the build machine's `workspaceRoot`. */
 export function filesWithBuildPaths(
   files: Iterable<readonly [string, string]>,
   workspaceRoot: string,
 ): string[] {
-  return [...files]
+  return Iterator.from(files)
     .filter(([, text]) => text.includes(workspaceRoot))
-    .map(([name]) => name);
+    .map(([name]) => name)
+    .toArray();
 }
 
 /** Fails when any of `files` names the build machine's `workspaceRoot`. */
@@ -20,10 +21,11 @@ export function assertNoBuildPaths(
   workspaceRoot: string,
 ): void {
   const leaking = filesWithBuildPaths(files, workspaceRoot);
-  if (leaking.length > 0)
+  if (leaking.length > 0) {
     throw new Error(
       `build output names the build machine's path ${workspaceRoot}: ${leaking.join(', ')}`,
     );
+  }
 }
 
 /**
@@ -40,7 +42,9 @@ export function noBuildPaths(root: () => string): Plugin {
       const workspaceRoot = posixPath(searchForWorkspaceRoot(root()));
       assertNoBuildPaths(
         Object.values(bundle).map((file): readonly [string, string] => {
-          if (file.type === 'chunk') return [file.fileName, file.code];
+          if (file.type === 'chunk') {
+            return [file.fileName, file.code];
+          }
           return [
             file.fileName,
             typeof file.source === 'string' ? file.source : '',

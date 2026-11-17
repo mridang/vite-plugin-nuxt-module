@@ -25,12 +25,15 @@ interface SassModule extends Partial<Sass> {
 
 /** The module's own Sass compiler: the first of {@link SASS_COMPILERS} it can import. */
 export async function packageSass(root: string): Promise<Sass> {
+  // eslint-disable-next-line functional/no-loop-statements -- compilers are tried one at a time, in order, until one imports
   for (const name of SASS_COMPILERS) {
     try {
       const sass = await importFromRoot<SassModule>(name, root);
       const api =
         sass.compile && sass.compileString ? (sass as Sass) : sass.default;
-      if (api) return api;
+      if (api) {
+        return api;
+      }
     } catch {
       // not installed in the package: try the next compiler
     }

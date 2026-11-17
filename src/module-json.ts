@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { version as viteVersion } from 'vite';
+import { version } from 'vite';
 
 import { MODULE_JSON } from './defaults.js';
 import { readPackageJson } from './package-json.js';
@@ -32,8 +32,8 @@ async function ownPackage(): Promise<{
 
 /** The tools a module was built with, as `module.json` records them: this plugin and Vite. */
 export async function builderMeta(): Promise<Record<string, string>> {
-  const { name, version } = await ownPackage();
-  return { [name]: version, vite: viteVersion };
+  const own = await ownPackage();
+  return { [own.name]: own.version, vite: version };
 }
 
 /**
@@ -45,11 +45,13 @@ export async function moduleJson(
   pkg: { readonly name?: string; readonly version?: string },
   extra: Readonly<Record<string, unknown>> | undefined,
 ): Promise<Record<string, unknown>> {
-  const merged: Record<string, unknown> = { ...meta };
-  if (!merged.name) merged.name = pkg.name;
-  if (!merged.version) merged.version = pkg.version;
-  merged.builder = await builderMeta();
-  return { ...merged, ...extra };
+  return {
+    ...meta,
+    ...(meta.name ? {} : { name: pkg.name }),
+    ...(meta.version ? {} : { version: pkg.version }),
+    builder: await builderMeta(),
+    ...extra,
+  };
 }
 
 /** Imports the built `module<extension>` from `outDir` and writes its `module.json` next to it. */

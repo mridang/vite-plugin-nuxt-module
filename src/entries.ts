@@ -5,7 +5,7 @@ export type EntryOption = readonly string[] | Readonly<Record<string, string>>;
 
 /** The output name of an entry listed by file: its file name without directory or extension. */
 export function entryName(file: string): string {
-  return file.replaceAll(/^.*\/|\.[^.]+$/g, '');
+  return file.replaceAll(/^.*\/|\.[^.]+$/gu, '');
 }
 
 /**
@@ -14,17 +14,21 @@ export function entryName(file: string): string {
  * fails, pointing at the `{ name: file }` form.
  */
 export function namedEntries(entry: EntryOption): Record<string, string> {
-  if (!isEntryList(entry)) return { ...entry };
-  const named: Record<string, string> = {};
-  for (const file of entry) {
-    const name = entryName(file);
-    if (Object.hasOwn(named, name))
-      throw new Error(
-        `entry: ${named[name]} and ${file} are both named "${name}"; name them with the { name: file } form`,
-      );
-    named[name] = file;
+  if (!isEntryList(entry)) {
+    return Object.fromEntries(Object.entries(entry));
   }
-  return named;
+  const named = entry.map((file) => ({ name: entryName(file), file }));
+  const duplicate = named.find(
+    ({ name }, index) =>
+      named.findIndex((other) => other.name === name) < index,
+  );
+  if (duplicate) {
+    const first = named.find((other) => other.name === duplicate.name);
+    throw new Error(
+      `entry: ${first?.file ?? duplicate.file} and ${duplicate.file} are both named "${duplicate.name}"; name them with the { name: file } form`,
+    );
+  }
+  return Object.fromEntries(named.map(({ name, file }) => [name, file]));
 }
 
 /**

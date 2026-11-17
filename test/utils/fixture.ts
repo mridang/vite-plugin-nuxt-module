@@ -8,12 +8,14 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import nodePath from 'node:path';
-import type { RolldownWatcher } from 'rolldown';
-import { build, type UserConfig } from 'vite';
+import { build } from 'vite';
 
 import { PACKAGE_ROOT } from '../contract/paths.js';
 import './realm.js';
-import { type NuxtModuleOptions, nuxtModule } from '../../src/index.js';
+import { nuxtModule } from '../../src/index.js';
+import type { RolldownWatcher } from 'rolldown';
+import type { UserConfig } from 'vite';
+import type { NuxtModuleOptions } from '../../src/index.js';
 
 /** This package's own `node_modules`, which every fixture links so it resolves the build tools. */
 const OWN_NODE_MODULES = nodePath.join(PACKAGE_ROOT, 'node_modules');

@@ -9,8 +9,8 @@ import {
   vueTransformer,
 } from '../src/vue-sfc.js';
 
-const INSTALL_TRANSFORMER_PATTERN = /install vue-sfc-transformer/;
-const INDENTED_COMMENT_PATTERN = /^\/\* indented /;
+const INSTALL_TRANSFORMER_PATTERN = /install vue-sfc-transformer/u;
+const INDENTED_COMMENT_PATTERN = /^\/\* indented /u;
 
 const directories: string[] = [];
 async function tree(files: Record<string, string>): Promise<string> {
@@ -27,12 +27,13 @@ async function tree(files: Record<string, string>): Promise<string> {
   return root;
 }
 afterEach(async () => {
-  for (const d of directories.splice(0))
+  for (const d of directories.splice(0)) {
     await rm(d, { recursive: true, force: true });
+  }
 });
 
 /** A fake `vue-sfc-transformer` at `dir` whose loader names where it was installed. */
-function transformer(dir: string, name: string): Record<string, string> {
+function transformer(dir: string, name: string) {
   return {
     [`${dir}/package.json`]: JSON.stringify({
       name: 'vue-sfc-transformer',
@@ -51,6 +52,7 @@ const fakeSass = {
     exports: { '.': './index.mjs' },
   }),
   'node_modules/sass/index.mjs':
+    // eslint-disable-next-line no-template-curly-in-string -- source text of a fixture module, not a template of this file
     "export const compile = () => ({ css: '' });\nexport const compileString = (source, o) => ({ css: `/* ${o.syntax} ${o.url} */ ${source}` });\n",
 };
 

@@ -1,15 +1,15 @@
-import { version as viteVersion } from 'vite';
+import { version } from 'vite';
 import { describe, expect, it } from '@jest/globals';
 
 import { builderMeta, moduleJson } from '../src/module-json.js';
 
-const SEMVER_PATTERN = /^\d+\.\d+\.\d+/;
+const SEMVER_PATTERN = /^\d+\.\d+\.\d+/u;
 
 describe('builderMeta', () => {
   it('names this plugin and the Vite it built with', async () => {
     expect(await builderMeta()).toEqual({
       '@mridang/vite-plugin-nuxt-module': expect.stringMatching(SEMVER_PATTERN),
-      vite: viteVersion,
+      vite: version,
     });
   });
 });

@@ -1,12 +1,7 @@
 import { stripVTControlCharacters } from 'node:util';
-import {
-  createLogger,
-  type Logger,
-  type Plugin,
-  type ResolvedConfig,
-} from 'vite';
-
+import { createLogger } from 'vite';
 import { PLUGIN_PREFIX } from './defaults.js';
+import type { Logger, Plugin, ResolvedConfig } from 'vite';
 
 /** The parts of a bundler log or warning the warning policy reads. */
 export interface BuildLog {
@@ -66,6 +61,7 @@ export function failOnWarnings(
   outcome: BuildOutcome = freshOutcome(),
 ) {
   const fail = (log: BuildLog): never => {
+    // eslint-disable-next-line functional/immutable-data -- the plugin keeps its build state across its hooks
     outcome.failed = true;
     throw failure(log);
   };
@@ -75,11 +71,15 @@ export function failOnWarnings(
       log: T,
       handler: (level: L, log: T) => void,
     ): void {
-      if (level === 'warn' && !isAllowedLog(log, allow)) fail(log);
+      if (level === 'warn' && !isAllowedLog(log, allow)) {
+        fail(log);
+      }
       handler(level, log);
     },
     onwarn(warning: BuildLog): void {
-      if (!isAllowedLog(warning, allow)) fail(warning);
+      if (!isAllowedLog(warning, allow)) {
+        fail(warning);
+      }
     },
   };
 }
@@ -95,7 +95,9 @@ export function failOnDeclarationWarnings(allow: readonly string[]) {
     log: T,
     handler: (level: L, log: T) => void,
   ): void => {
-    if (log.code && REPORT_CODES.has(log.code)) return;
+    if (log.code && REPORT_CODES.has(log.code)) {
+      return;
+    }
     policy.onLog(level, log, handler);
   };
 }
@@ -108,6 +110,12 @@ interface WarningsApi {
   readonly outcome: BuildOutcome;
 }
 
+/** The logger that records Vite's warnings, and the plugin that fails the build on them. */
+export interface LoggedWarnings {
+  readonly customLogger: Logger;
+  readonly plugin: Plugin;
+}
+
 /**
  * Vite's own warnings (config deprecations, an output option Vite ignores, a chunk-size report)
  * go to its logger, never to Rolldown's `onLog`. `customLogger` records each one (and prints it
@@ -115,15 +123,15 @@ interface WarningsApi {
  * resolved at `buildStart`, the rest once the bundle is written, before any step that runs after
  * it. The plugin also carries the build's {@link BuildOutcome}.
  */
-export function failOnLoggedWarnings(outcome: BuildOutcome): {
-  readonly customLogger: Logger;
-  readonly plugin: Plugin;
-} {
+export function failOnLoggedWarnings(outcome: BuildOutcome): LoggedWarnings {
   // `customLogger` replaces Vite's own logger and with it `logLevel`: the level is read in `config`.
+  // eslint-disable-next-line functional/no-let -- the plugin keeps its build state across its hooks
   let base = createLogger();
+  // eslint-disable-next-line functional/no-let -- the plugin keeps its build state across its hooks
   let resolved: ResolvedConfig | undefined;
   const warnings: string[] = [];
   const record = (message: string): void => {
+    // eslint-disable-next-line functional/immutable-data -- the plugin keeps its build state across its hooks
     warnings.push(stripVTControlCharacters(message).trim());
   };
   const customLogger: Logger = {
@@ -144,13 +152,19 @@ export function failOnLoggedWarnings(outcome: BuildOutcome): {
     },
   };
   const check = (): void => {
-    if (warnings.length === 0) return;
+    if (warnings.length === 0) {
+      return;
+    }
+    // eslint-disable-next-line functional/immutable-data -- the plugin keeps its build state across its hooks
     outcome.failed = true;
+    // eslint-disable-next-line functional/immutable-data -- the plugin keeps its build state across its hooks
     throw new Error(`Vite warned:\n${warnings.splice(0).join('\n')}`);
   };
   // A failed build's own error is its report: the warnings it logged go with it, not into the next build.
   const failed = (): void => {
+    // eslint-disable-next-line functional/immutable-data -- the plugin keeps its build state across its hooks
     outcome.failed = true;
+    // eslint-disable-next-line functional/immutable-data -- the plugin keeps its build state across its hooks
     warnings.length = 0;
   };
   const plugin: Plugin & { api: WarningsApi } = {
@@ -165,12 +179,15 @@ export function failOnLoggedWarnings(outcome: BuildOutcome): {
     buildStart: {
       order: 'pre',
       handler() {
+        // eslint-disable-next-line functional/immutable-data -- the plugin keeps its build state across its hooks
         outcome.failed = false;
         check();
       },
     },
     buildEnd(error) {
-      if (error) failed();
+      if (error) {
+        failed();
+      }
     },
     renderError: failed,
     configResolved(config) {
@@ -179,7 +196,9 @@ export function failOnLoggedWarnings(outcome: BuildOutcome): {
     closeBundle: {
       order: 'pre',
       async handler() {
-        if (!resolved?.build.watch) return check();
+        if (!resolved?.build.watch) {
+          return check();
+        }
         return closeStep(resolved, WARNINGS_PLUGIN, check);
       },
     },
@@ -196,12 +215,14 @@ export function failOnLoggedWarnings(outcome: BuildOutcome): {
 async function closeStep(
   config: Pick<ResolvedConfig, 'build' | 'logger'>,
   name: string,
-  step: () => unknown,
+  step: () => void | Promise<void>,
 ): Promise<void> {
   try {
     await step();
   } catch (error) {
-    if (!config.build.watch) throw error;
+    if (!config.build.watch) {
+      throw error;
+    }
     const message = error instanceof Error ? error.message : String(error);
     config.logger.error(`[${name}] ${message}`, {
       error: error instanceof Error ? error : undefined,
@@ -212,7 +233,7 @@ async function closeStep(
 /** A plugin that reads its build's {@link BuildOutcome} once the bundle is closed and hands it to `run`. */
 function onClose(
   name: string,
-  run: (config: ResolvedConfig, failed: boolean) => unknown,
+  run: (config: ResolvedConfig, failed: boolean) => void | Promise<void>,
   options: Omit<
     Plugin,
     | 'name'
@@ -224,12 +245,17 @@ function onClose(
     | 'closeBundle'
   > = {},
 ): Plugin {
+  // eslint-disable-next-line functional/no-let -- the plugin keeps its build state across its hooks
   let config: ResolvedConfig | undefined;
+  // eslint-disable-next-line functional/no-let -- the plugin keeps its build state across its hooks
   let outcome: BuildOutcome = { failed: false };
   // Without a warnings plugin, this step keeps the outcome itself, and starts it over every build.
+  // eslint-disable-next-line functional/no-let -- the plugin keeps its build state across its hooks
   let own = true;
   // Builds started so far, and the last run of the step: see `closeBundle`.
+  // eslint-disable-next-line functional/no-let -- the plugin keeps its build state across its hooks
   let builds = 0;
+  // eslint-disable-next-line functional/no-let -- the plugin keeps its build state across its hooks
   let previous: Promise<void> = Promise.resolve();
   return {
     ...options,
@@ -239,25 +265,36 @@ function onClose(
       config = resolved;
       const shared = resolved.plugins.find((p) => p.name === WARNINGS_PLUGIN)
         ?.api as WarningsApi | undefined;
-      if (shared) outcome = shared.outcome;
+      if (shared) {
+        outcome = shared.outcome;
+      }
       own = !shared;
     },
     buildStart: {
       order: 'pre',
       handler() {
         builds += 1;
-        if (own) outcome.failed = false;
+        if (own) {
+          // eslint-disable-next-line functional/immutable-data -- the plugin keeps its build state across its hooks
+          outcome.failed = false;
+        }
       },
     },
     buildEnd(error) {
-      if (error) outcome.failed = true;
+      if (error) {
+        // eslint-disable-next-line functional/immutable-data -- the plugin keeps its build state across its hooks
+        outcome.failed = true;
+      }
     },
     renderError() {
+      // eslint-disable-next-line functional/immutable-data -- the plugin keeps its build state across its hooks
       outcome.failed = true;
     },
     closeBundle(): Promise<void> | undefined {
       const resolved = config;
-      if (!resolved) return undefined;
+      if (!resolved) {
+        return undefined;
+      }
       // Under `--watch` the next rebuild can start before this step ends (Vite does not wait for
       // it): the outcome is read now, the runs go one at a time, and a failure is recorded only
       // while no later build has started.
@@ -268,7 +305,10 @@ function onClose(
           await run(resolved, failed);
         } catch (error) {
           // A failed step fails the build: the steps after it are skipped.
-          if (build === builds) outcome.failed = true;
+          if (build === builds) {
+            // eslint-disable-next-line functional/immutable-data -- the plugin keeps its build state across its hooks
+            outcome.failed = true;
+          }
           throw error;
         }
       };
@@ -287,12 +327,16 @@ function onClose(
  */
 export function afterBuild(
   name: string,
-  step: (config: ResolvedConfig) => unknown,
+  step: (config: ResolvedConfig) => void | Promise<void>,
   options: Parameters<typeof onClose>[2] = {},
 ): Plugin {
   return onClose(
     name,
-    (config, failed) => (failed ? undefined : step(config)),
+    async (config, failed) => {
+      if (!failed) {
+        await step(config);
+      }
+    },
     options,
   );
 }

@@ -1,5 +1,4 @@
 import path from 'node:path';
-import type { UserConfig } from 'vite';
 
 import {
   NUXT_EXTENSION,
@@ -9,11 +8,14 @@ import {
   NUXT_SOURCEMAP,
   SOURCE_ROOT,
 } from './defaults.js';
-import { type EntryOption, namedEntries, resolvedEntries } from './entries.js';
+import { namedEntries, resolvedEntries } from './entries.js';
 import { exists } from './exists.js';
-import { type Matcher, moduleExternals } from './externals.js';
+import { moduleExternals } from './externals.js';
 import { isModulePackage } from './package-json.js';
 import { moduleRuntimeDir } from './runtime.js';
+import type { Matcher } from './externals.js';
+import type { EntryOption } from './entries.js';
+import type { UserConfig } from 'vite';
 
 /** Options of {@link nuxtModule}. Every default is a named constant in `defaults.ts`. */
 export interface NuxtModuleOptions {
@@ -121,20 +123,23 @@ export async function resolveOptions(
   userConfig: Pick<UserConfig, 'build'> = {},
 ): Promise<ResolvedOptions> {
   const extension = options.extension ?? NUXT_EXTENSION;
-  if (!NUXT_EXTENSIONS.includes(extension))
+  if (!NUXT_EXTENSIONS.includes(extension)) {
     throw new Error(
       `nuxtModule: extension ${extension} is not one of ${NUXT_EXTENSIONS.join(', ')}`,
     );
+  }
   // Node loads `.js` as ESM only in a module package; elsewhere `module.json`'s import of the module would fail.
-  if (extension === '.js' && !(await isModulePackage(root)))
+  if (extension === '.js' && !(await isModulePackage(root))) {
     throw new Error(
       'nuxtModule: extension .js writes ESM, which Node loads as CommonJS outside a "type": "module" package; use .mjs',
     );
+  }
   const moduleFile = options.module ?? NUXT_MODULE_ENTRY;
-  if (!(await exists(path.resolve(root, moduleFile))))
+  if (!(await exists(path.resolve(root, moduleFile)))) {
     throw new Error(
       `nuxtModule: no module to build: ${moduleFile} does not exist; set \`module\``,
     );
+  }
   const runtimeDir = await moduleRuntimeDir(root, options.runtimeDir);
   const entry = resolvedEntries(
     {
@@ -148,10 +153,11 @@ export async function resolveOptions(
     (file) =>
       runtimeDir && file.startsWith(`${runtimeDir.split(path.sep).join('/')}/`),
   );
-  if (inRuntime.length > 0)
+  if (inRuntime.length > 0) {
     throw new Error(
       `nuxtModule: ${inRuntime.map((f) => path.relative(root, f)).join(', ')} lie in the runtime directory, which is built file by file; remove them from \`entry\``,
     );
+  }
   const dts = options.dts === false ? undefined : (options.dts ?? {});
   return {
     root,

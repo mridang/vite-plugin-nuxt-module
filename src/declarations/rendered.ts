@@ -1,14 +1,17 @@
-import { type RolldownPlugin, RolldownMagicString } from 'rolldown';
+import { RolldownMagicString } from 'rolldown';
 import { parseAst } from 'rolldown/parseAst';
 
 import { PLUGIN_PREFIX } from '../defaults.js';
+import type { RolldownPlugin } from 'rolldown';
 
-const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/;
-const SCRIPT_FILE_PATTERN = /\.[cm]?tsx?$/;
+const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/u;
+const SCRIPT_FILE_PATTERN = /\.[cm]?tsx?$/u;
 
 /** The parser language of a declaration-step module: `.d.ts` files, `.tsx`, else TypeScript. */
 function languageOf(id: string): 'dts' | 'tsx' | 'ts' {
-  if (DECLARATION_FILE_PATTERN.test(id)) return 'dts';
+  if (DECLARATION_FILE_PATTERN.test(id)) {
+    return 'dts';
+  }
   return id.endsWith('.tsx') ? 'tsx' : 'ts';
 }
 
@@ -20,26 +23,35 @@ export interface StarReExports {
 
 /** The bare (package) specifiers `code` re-exports wholesale (`export * from "pkg"`), by kind. */
 export function starReExports(code: string, id: string): StarReExports {
-  const typeOnly: string[] = [];
-  const value: string[] = [];
-  let body: ReturnType<typeof parseAst>['body'];
   try {
-    body = parseAst(
+    const stars = parseAst(
       code,
       { lang: languageOf(id), sourceType: 'module' },
       id,
-    ).body;
+    ).body.flatMap((node) => {
+      if (node.type === 'ExportAllDeclaration' && !node.exported) {
+        const source = node.source.value;
+        if (!source.startsWith('.') && !source.startsWith('/')) {
+          return [{ source, isType: node.exportKind === 'type' }];
+        }
+      }
+      return [];
+    });
+    return {
+      typeOnly: stars
+        .values()
+        .filter((star) => star.isType)
+        .map((star) => star.source)
+        .toArray(),
+      value: stars
+        .values()
+        .filter((star) => !star.isType)
+        .map((star) => star.source)
+        .toArray(),
+    };
   } catch {
-    return { typeOnly, value };
+    return { typeOnly: [], value: [] };
   }
-  for (const node of body) {
-    if (node.type === 'ExportAllDeclaration' && !node.exported) {
-      const source = node.source.value;
-      if (!source.startsWith('.') && !source.startsWith('/'))
-        (node.exportKind === 'type' ? typeOnly : value).push(source);
-    }
-  }
-  return { typeOnly, value };
 }
 
 /**
@@ -53,20 +65,27 @@ export function finishedDeclaration(
 ): { code: string; map: string } | null {
   const { body } = parseAst(code, { lang: 'dts', sourceType: 'module' });
   const s = new RolldownMagicString(code);
-  for (const node of body)
+  // eslint-disable-next-line functional/no-loop-statements -- each edit is applied to the magic string for its side effect
+  for (const node of body) {
     if (
       node.type === 'ExportAllDeclaration' &&
       !node.exported &&
       node.exportKind !== 'type' &&
       typeOnly.has(node.source.value)
-    )
+    ) {
       s.appendLeft(node.start + 'export'.length, ' type');
+    }
+  }
   const moduleSyntax = body.some(
     (node) =>
       node.type.startsWith('Export') || node.type === 'ImportDeclaration',
   );
-  if (!moduleSyntax) s.append('\nexport {};\n');
-  if (!s.hasChanged()) return null;
+  if (!moduleSyntax) {
+    s.append('\nexport {};\n');
+  }
+  if (!s.hasChanged()) {
+    return null;
+  }
   return { code: s.toString(), map: s.generateMap({ hires: true }).toString() };
 }
 
@@ -85,7 +104,9 @@ export function finishedDeclarations(): RolldownPlugin {
   return {
     name: `${PLUGIN_PREFIX}:dts-finish`,
     buildStart() {
+      // eslint-disable-next-line functional/immutable-data -- the plugin's state is reset for each build
       typeOnly.clear();
+      // eslint-disable-next-line functional/immutable-data -- the plugin's state is reset for each build
       value.clear();
     },
     transform: {
@@ -93,8 +114,16 @@ export function finishedDeclarations(): RolldownPlugin {
       filter: { id: SCRIPT_FILE_PATTERN },
       handler(code, id) {
         const found = starReExports(code, id);
-        for (const source of found.typeOnly) typeOnly.add(source);
-        for (const source of found.value) value.add(source);
+        // eslint-disable-next-line functional/no-loop-statements -- records each module's re-exports in the plugin's state
+        for (const source of found.typeOnly) {
+          // eslint-disable-next-line functional/immutable-data -- the plugin's state is built up across modules
+          typeOnly.add(source);
+        }
+        // eslint-disable-next-line functional/no-loop-statements -- records each module's re-exports in the plugin's state
+        for (const source of found.value) {
+          // eslint-disable-next-line functional/immutable-data -- the plugin's state is built up across modules
+          value.add(source);
+        }
         return null;
       },
     },

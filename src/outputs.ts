@@ -1,11 +1,9 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { Plugin } from 'vite';
 
 import { emitBundledTypes } from './declarations/bundle.js';
 import { PLUGIN_PREFIX } from './defaults.js';
 import { exists, firstFound } from './exists.js';
-import type { ResolvedOptions } from './options.js';
 import { packageTypeScript, realPackageDirectory } from './resolve.js';
 import { absolutePaths, parsedTsconfig } from './tsconfig.js';
 import { afterBuild } from './warnings.js';
@@ -13,6 +11,8 @@ import { writeModuleJson } from './module-json.js';
 import { buildRuntime, declarationRuntimeExternals } from './runtime.js';
 import { effectiveTsconfig } from './nuxt-tsconfig.js';
 import { writeTypesEntry } from './types-entry.js';
+import type { ResolvedOptions } from './options.js';
+import type { Plugin } from 'vite';
 
 /** Where shared chunks of the bundled module go, per extension (what `nuxt-module-build` writes). */
 export const sharedChunkFileNames = (extension: string): string =>
@@ -34,7 +34,9 @@ async function hoistedTypeDir(
   root: string,
 ): Promise<string | undefined> {
   const own = await realPackageDirectory(name, root);
-  if (own) return own;
+  if (own) {
+    return own;
+  }
   return firstFound(HOISTED_FROM, async (via) => {
     const viaDir = await realPackageDirectory(via, root);
     return viaDir ? realPackageDirectory(name, viaDir) : undefined;
@@ -50,19 +52,24 @@ async function hoistedTypeDir(
 export async function hoistedTypePaths(
   root: string,
 ): Promise<Record<string, string[]>> {
-  const paths: Record<string, string[]> = {};
   const directories = await Promise.all(
     NUXT_HOISTED_TYPES.map(async (name) => hoistedTypeDir(name, root)),
   );
-  for (const [index, name] of NUXT_HOISTED_TYPES.entries()) {
-    const dir = directories[index];
-    if (!dir) continue;
-    paths[name] = [dir];
-    paths[`${name}/*`] = [`${dir}/*`];
-  }
   const nuxt = await realPackageDirectory('nuxt', root);
-  if (nuxt) paths['#app/nuxt'] = [path.join(nuxt, 'dist/app/nuxt')];
-  return paths;
+  return {
+    ...Object.fromEntries(
+      NUXT_HOISTED_TYPES.flatMap((name, index) => {
+        const dir = directories[index];
+        return dir
+          ? [
+              [name, [dir]],
+              [`${name}/*`, [`${dir}/*`]],
+            ]
+          : [];
+      }),
+    ),
+    ...(nuxt ? { '#app/nuxt': [path.join(nuxt, 'dist/app/nuxt')] } : {}),
+  };
 }
 
 /**
@@ -82,7 +89,6 @@ export async function moduleDeclarationOptions(
 ): Promise<{ paths?: Record<string, string[]>; types?: string[] }> {
   const ts = await packageTypeScript(root);
   const { options } = parsedTsconfig(ts, tsconfig);
-  const result: { paths?: Record<string, string[]>; types?: string[] } = {};
   const own =
     options.types ?? ts.getAutomaticTypeDirectiveNames(options, ts.sys);
   const installed = await Promise.all(
@@ -92,12 +98,13 @@ export async function moduleDeclarationOptions(
     ),
   );
   const types = NUXT_HOISTED_TYPES.filter((_, index) => installed[index]);
-  if (types.length > 0) result.types = [...own, ...types];
   const hoisted = await hoistedTypePaths(root);
-  if (Object.keys(hoisted).length > 0) {
-    result.paths = { ...hoisted, ...absolutePaths(options, tsconfig) };
-  }
-  return result;
+  return {
+    ...(types.length > 0 ? { types: [...own, ...types] } : {}),
+    ...(Object.keys(hoisted).length > 0
+      ? { paths: { ...hoisted, ...absolutePaths(options, tsconfig) } }
+      : {}),
+  };
 }
 
 /** `<name>.d.ts` copies of each bundled entry's `<name>.d.mts`, for consumers on `node10` resolution. */
@@ -108,8 +115,9 @@ export async function writeCompatibleDeclarations(
   await Promise.all(
     names.map(async (name) => {
       const mts = path.join(outDir, `${name}.d.mts`);
-      if (await exists(mts))
+      if (await exists(mts)) {
         await writeFile(path.join(outDir, `${name}.d.ts`), await readFile(mts));
+      }
     }),
   );
 }
@@ -122,7 +130,9 @@ export async function writeCompatibleDeclarations(
 export function nuxtRuntime(options: () => ResolvedOptions): Plugin {
   return afterBuild(`${PLUGIN_PREFIX}:runtime`, async (config) => {
     const o = options();
-    if (!o.runtimeDir) return;
+    if (!o.runtimeDir) {
+      return;
+    }
     await buildRuntime({
       root: o.root,
       entry: o.entry,
@@ -165,10 +175,13 @@ export function nuxtModuleOutputs(options: () => ResolvedOptions): Plugin {
           : [],
       });
       // `module.mjs` → `module.d.mts`; an entry built as `.js` would pair with `.d.ts`.
-      if (o.compatible && o.extension === '.mjs')
+      if (o.compatible && o.extension === '.mjs') {
         await writeCompatibleDeclarations(outDir, Object.keys(o.entry));
+      }
     }
     await writeModuleJson({ ...o, outDir });
-    if (o.dts) await writeTypesEntry(o.root, outDir, o.extension);
+    if (o.dts) {
+      await writeTypesEntry(o.root, outDir, o.extension);
+    }
   });
 }

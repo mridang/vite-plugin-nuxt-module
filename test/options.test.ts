@@ -7,15 +7,15 @@ import { matchesAny } from '../src/externals.js';
 import { resolveOptions } from '../src/options.js';
 
 const MODULE_MISSING_PATTERN =
-  /no module to build: src\/module\.ts does not exist/;
+  /no module to build: src\/module\.ts does not exist/u;
 const RUNTIME_PLUGIN_PATTERN =
-  /src\/runtime\/plugin\.ts lie in the runtime directory/;
-const TYPE_MODULE_PATTERN = /"type": "module"/;
+  /src\/runtime\/plugin\.ts lie in the runtime directory/u;
+const TYPE_MODULE_PATTERN = /"type": "module"/u;
 const MISSING_RUNTIME_DIRECTORY_PATTERN =
-  /runtime directory src\/missing not found/;
+  /runtime directory src\/missing not found/u;
 
-const DEFAULT_FILES: Record<string, string> = { 'src/module.ts': '' };
-const DEFAULT_PACKAGE: Record<string, unknown> = {
+const DEFAULT_FILES = { 'src/module.ts': '' };
+const DEFAULT_PACKAGE = {
   name: 'mod',
   type: 'module',
 };
@@ -39,8 +39,9 @@ async function packageRoot(
     });
     await writeFile(nodePath.join(root, path), content);
   }
-  if ('src/module.ts' in files)
+  if ('src/module.ts' in files) {
     await mkdir(nodePath.join(root, 'src/runtime'), { recursive: true });
+  }
   return root;
 }
 

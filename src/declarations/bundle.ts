@@ -1,28 +1,26 @@
 import path from 'node:path';
-import { rolldown, type RolldownPlugin } from 'rolldown';
-import { dts as rolldownDts } from 'rolldown-plugin-dts';
+import { rolldown } from 'rolldown';
+import { dts } from 'rolldown-plugin-dts';
 
 import {
   CONSUMER_COMPILER_OPTIONS,
   PLUGIN_PREFIX,
   SOURCE_ROOT,
 } from '../defaults.js';
-import type { Matcher } from '../externals.js';
 import { noBuildPaths } from '../no-build-paths.js';
 import { failOnDeclarationWarnings } from '../warnings.js';
-import {
-  type CompilerOverrides,
-  declarationTypeErrors,
-  sourceTypeErrors,
-} from './check.js';
+import { declarationTypeErrors, sourceTypeErrors } from './check.js';
 import { finishedDeclarations } from './rendered.js';
 import { selfReferenceOptions } from './self-reference.js';
+import type { CompilerOverrides } from './check.js';
+import type { Matcher } from '../externals.js';
+import type { RolldownPlugin } from 'rolldown';
 
-const QUERY_SUFFIX_PATTERN = /\?.*/s;
+const QUERY_SUFFIX_PATTERN = /\?.*/su;
 
 /** CSS module imports (`./x.module.css`): Vite turns them into an object of class names. */
 export const CSS_MODULE_IMPORT =
-  /\.module\.(css|scss|sass|less|styl|stylus|pcss|postcss|sss)$/;
+  /\.module\.(css|scss|sass|less|styl|stylus|pcss|postcss|sss)$/u;
 
 /** Imports with no types of their own (`./x.css?inline`, `./x.liquid`, `./x.svg?react`, `./x.module.scss`). */
 export const ASSET_IMPORT = new RegExp(
@@ -31,6 +29,7 @@ export const ASSET_IMPORT = new RegExp(
     String.raw`\.(css|liquid|svg|png|jpe?g|gif|webp|woff2?)$`,
     CSS_MODULE_IMPORT.source,
   ].join('|'),
+  'u',
 );
 
 /**
@@ -40,7 +39,7 @@ export const ASSET_IMPORT = new RegExp(
  * import: only the source's ambient `declare module` knows what it is. A CSS module is not one.
  */
 export const STRING_ASSET_IMPORT =
-  /\?(?:inline|raw|url)$|(?<!\.module)\.(css|liquid|svg|png|jpe?g|gif|webp|woff2?)$/;
+  /\?(?:inline|raw|url)$|(?<!\.module)\.(css|liquid|svg|png|jpe?g|gif|webp|woff2?)$/u;
 
 /** The declaration of a string-valued asset module. */
 const STRING_ASSET_DECLARATION =
@@ -57,7 +56,9 @@ const DECLARATION_SUFFIXES = {
 } as const;
 
 function assetSuffix(id: string): string | undefined {
-  if (STRING_ASSET_IMPORT.test(id)) return '.asset.d.ts';
+  if (STRING_ASSET_IMPORT.test(id)) {
+    return '.asset.d.ts';
+  }
   return CSS_MODULE_IMPORT.test(id) ? '.classes.d.ts' : undefined;
 }
 
@@ -72,9 +73,13 @@ function declarationAssets(): RolldownPlugin {
   return {
     name: `${PLUGIN_PREFIX}:dts-assets`,
     resolveId(id: string, importer?: string) {
-      if (!ASSET_IMPORT.test(id)) return null;
+      if (!ASSET_IMPORT.test(id)) {
+        return null;
+      }
       const suffix = assetSuffix(id);
-      if (!suffix || !importer) return { id, external: true };
+      if (!suffix || !importer) {
+        return { id, external: true };
+      }
       return {
         id: `${path.resolve(path.dirname(importer), id.replace(QUERY_SUFFIX_PATTERN, ''))}${suffix}`,
       };
@@ -83,7 +88,9 @@ function declarationAssets(): RolldownPlugin {
       const suffix = Object.keys(DECLARATION_SUFFIXES).find((s) =>
         id.endsWith(s),
       ) as keyof typeof DECLARATION_SUFFIXES | undefined;
-      if (!suffix) return null;
+      if (!suffix) {
+        return null;
+      }
       return {
         code: DECLARATION_SUFFIXES[suffix],
         map: {
@@ -165,11 +172,11 @@ export async function emitBundledTypes(
     overrides: compilerOptions,
     sourceRoot,
   });
-  if (sourceErrors.length > 0)
+  if (sourceErrors.length > 0) {
     throw new Error(
       `declarations: ${sourceErrors.length} type error(s):\n${sourceErrors.join('\n')}`,
     );
-  const written: string[] = [];
+  }
   const sourcemap = o.sourcemap ?? true;
   const bundle = await rolldown({
     input: o.entry,
@@ -181,7 +188,7 @@ export async function emitBundledTypes(
       declarationAssets(),
       noBuildPaths(() => o.root) as RolldownPlugin,
       finishedDeclarations(),
-      rolldownDts({
+      dts({
         emitDtsOnly: true,
         tsconfig: o.tsconfig,
         sourcemap,
@@ -195,22 +202,32 @@ export async function emitBundledTypes(
     ],
     onLog: failOnDeclarationWarnings(o.allowWarnings ?? []),
   });
-  for (const extension of o.exts) {
-    // Shared declaration chunks keep their real export names: mangled ones (`Oy`) would be what editors show
-    // for every type that crosses a chunk boundary.
-    const { output } = await bundle.write({
-      dir: o.outDir,
-      format: 'es',
-      entryFileNames: `[name]${extension}`,
-      chunkFileNames:
-        o.chunkFileNames?.(extension) ?? `[name]-[hash]${extension}`,
-      sourcemap,
-      minifyInternalExports: false,
-    });
-    for (const file of output)
-      if (file.type === 'chunk' && file.isEntry)
-        written.push(path.join(o.outDir, file.fileName));
-  }
+  // The extensions are written one after the other, in order.
+  const written = await o.exts.reduce<Promise<string[]>>(
+    async (previous, extension) => {
+      const sofar = await previous;
+      // Shared declaration chunks keep their real export names: mangled ones (`Oy`) would be what editors show
+      // for every type that crosses a chunk boundary.
+      const { output } = await bundle.write({
+        dir: o.outDir,
+        format: 'es',
+        entryFileNames: `[name]${extension}`,
+        chunkFileNames:
+          o.chunkFileNames?.(extension) ?? `[name]-[hash]${extension}`,
+        sourcemap,
+        minifyInternalExports: false,
+      });
+      return [
+        ...sofar,
+        ...output.flatMap((file) =>
+          file.type === 'chunk' && file.isEntry
+            ? [path.join(o.outDir, file.fileName)]
+            : [],
+        ),
+      ];
+    },
+    Promise.resolve([]),
+  );
   await bundle.close();
   // Read with the options they were emitted under: the `paths` / `types` a framework hoists for its consumers.
   const errors = await declarationTypeErrors(
@@ -220,8 +237,9 @@ export async function emitBundledTypes(
     written,
     compilerOptions,
   );
-  if (errors.length > 0)
+  if (errors.length > 0) {
     throw new Error(
       `declarations: the written declarations have ${errors.length} type error(s):\n${errors.join('\n')}`,
     );
+  }
 }

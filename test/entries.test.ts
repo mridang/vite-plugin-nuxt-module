@@ -9,7 +9,7 @@ import {
 } from '../src/entries.js';
 
 const DUPLICATE_INDEX_NAME_PATTERN =
-  /src\/a\/index\.ts and src\/b\/index\.ts are both named "index"/;
+  /src\/a\/index\.ts and src\/b\/index\.ts are both named "index"/u;
 
 describe('entryName', () => {
   it('drops the directory and the extension', () => {

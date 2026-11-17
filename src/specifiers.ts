@@ -2,17 +2,17 @@ import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { parse } from 'vite';
 
-const TS_JSX_EXTENSION_PATTERN = /\.(ts|tsx|jsx)$/;
-const MTS_EXTENSION_PATTERN = /\.mts$/;
-const CTS_EXTENSION_PATTERN = /\.cts$/;
-const JS_EXTENSION_PATTERN = /\.[cm]?js$/;
-const RELATIVE_OR_ROOT_SPECIFIER_PATTERN = /^\.\.?(\/|$)/;
-const QUERY_OR_HASH_CHARACTER_PATTERN = /[?#]/;
-const TS_SOURCE_EXTENSION_PATTERN = /\.(?:ts|tsx|jsx|mts|cts)$/;
-const QUOTE_OR_BACKSLASH_PATTERN = /['"\\]/;
+const TS_JSX_EXTENSION_PATTERN = /\.(ts|tsx|jsx)$/u;
+const MTS_EXTENSION_PATTERN = /\.mts$/u;
+const CTS_EXTENSION_PATTERN = /\.cts$/u;
+const JS_EXTENSION_PATTERN = /\.[cm]?js$/u;
+const RELATIVE_OR_ROOT_SPECIFIER_PATTERN = /^\.\.?(\/|$)/u;
+const QUERY_OR_HASH_CHARACTER_PATTERN = /[?#]/u;
+const TS_SOURCE_EXTENSION_PATTERN = /\.(?:ts|tsx|jsx|mts|cts)$/u;
+const QUOTE_OR_BACKSLASH_PATTERN = /['"\\]/u;
 
 /** A declaration file name. */
-export const DECLARATION_RE = /\.d\.[cm]?ts$/;
+export const DECLARATION_RE = /\.d\.[cm]?ts$/u;
 
 /** Source extensions a relative specifier may leave out, in resolution order. */
 const SOURCE_EXTS = [
@@ -28,7 +28,7 @@ const SOURCE_EXTS = [
 ];
 
 /** A Sass stylesheet, compiled to `.css` in the runtime output. */
-export const SASS_RE = /\.s[ac]ss$/;
+export const SASS_RE = /\.s[ac]ss$/u;
 
 /** A Sass partial (`_vars.scss`): only ever `@use`d, never compiled or shipped on its own. */
 export const isSassPartial = (file: string): boolean =>
@@ -39,7 +39,9 @@ export const isSassPartial = (file: string): boolean =>
  * their name).
  */
 export function runtimeOutName(file: string): string {
-  if (DECLARATION_RE.test(file)) return file;
+  if (DECLARATION_RE.test(file)) {
+    return file;
+  }
   return file
     .replace(TS_JSX_EXTENSION_PATTERN, '.js')
     .replace(MTS_EXTENSION_PATTERN, '.mjs')
@@ -82,12 +84,16 @@ const TS_EXTS = ['.ts', '.tsx', '.mts', '.cts'];
 export async function sourceFileOf(
   target: string,
 ): Promise<string | undefined> {
-  if (await isFile(target)) return target;
+  if (await isFile(target)) {
+    return target;
+  }
   if (JS_EXTENSION_PATTERN.test(target)) {
     const found = await firstFile(
       TS_EXTS.map((ts) => target.replace(JS_EXTENSION_PATTERN, ts)),
     );
-    if (found) return found;
+    if (found) {
+      return found;
+    }
   }
   return (
     (await firstFile(SOURCE_EXTS.map((extension) => target + extension))) ??
@@ -109,7 +115,9 @@ export async function rewriteSpecifier(
   fromFile: string,
   scope?: SpecifierScope,
 ): Promise<string> {
-  if (!RELATIVE_OR_ROOT_SPECIFIER_PATTERN.test(spec)) return spec;
+  if (!RELATIVE_OR_ROOT_SPECIFIER_PATTERN.test(spec)) {
+    return spec;
+  }
   const queryAt = spec.search(QUERY_OR_HASH_CHARACTER_PATTERN);
   const suffix = queryAt < 0 ? '' : spec.slice(queryAt);
   const bare = suffix ? spec.slice(0, -suffix.length) : spec;
@@ -120,15 +128,18 @@ export async function rewriteSpecifier(
   const inside = (p: string) =>
     !scope || p.startsWith(scope.runtimeDir + path.sep);
   const located = (p: string): string => {
-    if (!scope || inside(p))
+    if (!scope || inside(p)) {
       return specifierOf(
         path
           .relative(path.dirname(fromFile), runtimeOutName(p))
           .split(path.sep)
           .join('/'),
       );
+    }
     const entry = scope.entries[p];
-    if (!entry) return spec;
+    if (!entry) {
+      return spec;
+    }
     // `fromFile` lands at `outDir/runtime/<rel>`, the entry at `outDir/<entry>`.
     const fromOut = path.posix.join(
       '/out/runtime',
@@ -152,9 +163,13 @@ export async function rewriteSpecifier(
     return isSourceImport || isSassImport ? located(target) : spec;
   }
   const source = await sourceFileOf(target);
-  if (!source) return spec;
+  if (!source) {
+    return spec;
+  }
   // `./x.js` written for a runtime `x.ts` already names the file built per file.
-  if (JS_EXTENSION_PATTERN.test(explicit) && inside(source)) return spec;
+  if (JS_EXTENSION_PATTERN.test(explicit) && inside(source)) {
+    return spec;
+  }
   return located(source);
 }
 
@@ -203,30 +218,35 @@ export async function specifierEdits(
   map: (specifier: string) => string | undefined | Promise<string | undefined>,
 ): Promise<Edit[]> {
   const { program } = await parse('module.ts', code, { lang });
-  const found: { start: number; end: number; value: string }[] = [];
-  const visit = (value: unknown): void => {
-    if (!value || typeof value !== 'object') return;
+  const visit = (
+    value: unknown,
+  ): { start: number; end: number; value: string }[] => {
+    if (!value || typeof value !== 'object') {
+      return [];
+    }
     if (Array.isArray(value)) {
-      for (const item of value) visit(item);
-      return;
+      return value.flatMap((item) => visit(item));
     }
     const node = value as AstNode;
     const src =
       node.type && IMPORTING_NODES.has(node.type) && node.source
         ? node.source
         : undefined;
-    if (
-      src &&
-      typeof src.value === 'string' &&
-      src.start !== undefined &&
+    const sourceValue = src?.value;
+    const own =
+      typeof sourceValue === 'string' &&
+      src?.start !== undefined &&
       src.end !== undefined
-    ) {
-      found.push({ start: src.start, end: src.end, value: src.value });
-    }
-    for (const [key, child] of Object.entries(node))
-      if (key !== 'source' || !src) visit(child);
+        ? [{ start: src.start, end: src.end, value: sourceValue }]
+        : [];
+    return [
+      ...own,
+      ...Object.entries(node).flatMap(([key, child]) =>
+        key !== 'source' || !src ? visit(child) : [],
+      ),
+    ];
   };
-  visit(program.body);
+  const found = visit(program.body);
   const mapped = await Promise.all(found.map(async (item) => map(item.value)));
   return found.flatMap((item, index) => {
     const next = mapped[index];

@@ -5,7 +5,7 @@ import {
   filesWithBuildPaths,
 } from '../src/no-build-paths.js';
 
-const MJS_A_PATTERN = /a\.mjs/;
+const MJS_A_PATTERN = /a\.mjs/u;
 
 describe('filesWithBuildPaths', () => {
   it('names the files that contain the workspace path', () => {

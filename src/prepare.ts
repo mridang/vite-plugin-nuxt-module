@@ -66,10 +66,11 @@ export async function prepareModule(
   moduleEntry: string,
 ): Promise<void> {
   const cli = await resolveNuxtCli(root);
-  if (!cli)
+  if (!cli) {
     throw new Error(
       `nuxtModule: prepare needs \`nuxt\` (or \`@nuxt/cli\`) installed in ${root}`,
     );
+  }
   const options = {
     cli: pathToFileURL(cli).href,
     root,
@@ -87,6 +88,7 @@ export async function prepareModule(
           stdio: ['ignore', 'pipe', 'pipe'],
         },
       );
+      // eslint-disable-next-line functional/no-let -- stdout and stderr are appended in the order they arrive
       let text = '';
       child.stdout.on('data', (d) => {
         text += d;
@@ -97,6 +99,7 @@ export async function prepareModule(
       child.on('close', (exit) => resolve({ code: exit ?? 1, out: text }));
     },
   );
-  if (code !== 0)
+  if (code !== 0) {
     throw new Error(`nuxtModule: preparing ${root} failed\n${out}`);
+  }
 }
