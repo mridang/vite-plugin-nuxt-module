@@ -8,15 +8,18 @@ import {
   isSourceTest,
   sourceTypeErrors,
 } from '../../src/declarations/check.js';
+import { isRecord } from '../../src/is-record.js';
 
 const INDEX_TS2322_ERROR_PATTERN = /^src\/index\.ts\(1,14\): error TS2322/u;
 const TS2688_PATTERN = /TS2688/u;
 const DIST_TS2503_ERROR_PATTERN = /dist\/index\.d\.mts\(1,17\): error TS2503/u;
 
 /** The compiler options of {@link FIXTURE_TSCONFIG}. */
-const fixtureOptions = (
-  JSON.parse(FIXTURE_TSCONFIG) as { compilerOptions: Record<string, unknown> }
-).compilerOptions;
+const fixtureTsconfig: unknown = JSON.parse(FIXTURE_TSCONFIG);
+const fixtureOptions =
+  isRecord(fixtureTsconfig) && isRecord(fixtureTsconfig.compilerOptions)
+    ? fixtureTsconfig.compilerOptions
+    : {};
 
 describe('sourceTypeErrors', () => {
   it('reports a type error of the sources, relative to the root', async () => {

@@ -67,11 +67,14 @@ export async function vueTools(root: string): Promise<VueTools | undefined> {
     return undefined;
   }
   const fromVueTsc = requireFrom(vueTscDir);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- require returns the compiler installed next to vue-tsc, and nothing can check that it is the version the types describe
   const ts = fromVueTsc('typescript') as TS;
   return {
     ts,
     createProgram(tsconfig) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- require returns the language core installed next to vue-tsc, and nothing can check that it is the version the types describe
       const core = fromVueTsc('@vue/language-core') as VueLanguageCore;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- require returns the Volar package installed next to vue-tsc, and nothing can check that it is the version the types describe
       const volar = fromVueTsc('@volar/typescript') as VolarTypescript;
       const { vueOptions } = core.createParsedCommandLine(ts, ts.sys, tsconfig);
       return volar.proxyCreateProgram(

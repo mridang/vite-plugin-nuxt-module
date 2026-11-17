@@ -124,29 +124,32 @@ describe('vueTransformer', () => {
 
 describe('sfcSnippetLoader', () => {
   it('strips TypeScript from a template expression snippet', async () => {
-    const [out] = await sfcSnippetLoader(await tree({ 'package.json': '{}' }))({
+    const outs = await sfcSnippetLoader(await tree({ 'package.json': '{}' }))({
       extension: '.ts',
       getContents: () =>
         "($attrs['data-slot'] as string | undefined) ?? 'root'",
     });
+    const out = outs.at(0);
     expect(out?.contents).not.toContain(' as string');
   });
 
   it('returns JS the template loader accepts', async () => {
-    const [out] = await sfcSnippetLoader(await tree({ 'package.json': '{}' }))({
+    const outs = await sfcSnippetLoader(await tree({ 'package.json': '{}' }))({
       extension: '.ts',
       getContents: () => 'x!',
     });
+    const out = outs.at(0);
     expect(out?.extension).toBe('.mjs');
   });
 
   it("compiles a Sass style block to CSS with the module's own Sass", async () => {
     const root = await tree({ 'package.json': '{}', ...fakeSass });
-    const [out] = await sfcSnippetLoader(root)({
+    const outs = await sfcSnippetLoader(root)({
       extension: '.scss',
       srcPath: nodePath.join(root, 'src/runtime/C.vue.scss'),
       getContents: () => 'a { b: c }',
     });
+    const out = outs.at(0);
     const scssUrl = new URL(
       `file://${nodePath.join(root, 'src/runtime/C.vue.scss')}`,
     ).href;
@@ -158,10 +161,11 @@ describe('sfcSnippetLoader', () => {
 
   it('compiles an indented-syntax style block as such', async () => {
     const root = await tree({ 'package.json': '{}', ...fakeSass });
-    const [out] = await sfcSnippetLoader(root)({
+    const outs = await sfcSnippetLoader(root)({
       extension: '.sass',
       getContents: () => 'a\n  b: c',
     });
+    const out = outs.at(0);
     expect(out?.contents).toMatch(INDENTED_COMMENT_PATTERN);
   });
 

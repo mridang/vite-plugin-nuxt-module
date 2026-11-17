@@ -97,14 +97,18 @@ export async function watchFixture(
   options: NuxtModuleOptions = {},
   vite: UserConfig = {},
 ): Promise<RolldownWatcher> {
-  return (await build({
+  const watcher = await build({
     root,
     ...vite,
     build: { ...vite.build, watch: {} },
     plugins: [nuxtModule(options), ...(vite.plugins ?? [])],
     configFile: false,
     logLevel: 'silent',
-  })) as RolldownWatcher;
+  });
+  if (Array.isArray(watcher) || !('close' in watcher)) {
+    throw new TypeError('a build with `watch` returns a watcher');
+  }
+  return watcher;
 }
 
 /** A file of a fixture's build output, as text. */

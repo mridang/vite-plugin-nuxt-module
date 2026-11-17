@@ -35,8 +35,8 @@ export function namedEntries(entry: EntryOption): Record<string, string> {
  * `path` with forward slashes: how Vite and Rolldown spell module ids on every platform, so a path
  * built with `node:path` (backslashes on Windows) compares equal to the id of the same file.
  */
-export function posixPath(path: string): string {
-  return path.replaceAll('\\', '/');
+export function posixPath(file: string): string {
+  return file.replaceAll('\\', '/');
 }
 
 /** The same entries with their files resolved against `root`, spelled like Vite's module ids. */

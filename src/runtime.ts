@@ -275,7 +275,7 @@ export async function runtimeImportTypes(
  */
 export function declarationRuntimeExternals(
   runtimeDir: string,
-): RolldownPlugin {
+): RolldownPlugin & Pick<ReturnType<typeof runtimeImports>, 'resolveId'> {
   const imports = runtimeImports(runtimeDir);
   return {
     name: `${PLUGIN_PREFIX}:dts-runtime-externals`,

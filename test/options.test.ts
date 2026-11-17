@@ -112,7 +112,11 @@ describe('resolveOptions', () => {
     async (extension) => {
       const root = await packageRoot();
       await expect(
-        resolveOptions({ extension: extension as '.mjs' }, root),
+        resolveOptions(
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the extension is one the option type forbids on purpose, to prove the check refuses it at runtime
+          { extension: extension as '.mjs' },
+          root,
+        ),
       ).rejects.toThrow(`extension ${extension} is not one of .mjs, .js`);
     },
   );

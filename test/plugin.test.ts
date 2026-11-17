@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import nodePath from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
+import { createLogger } from 'vite';
 import { nuxtModule } from '../src/index.js';
 import { buildConfig } from '../src/plugin.js';
 import { resolveOptions } from '../src/options.js';
@@ -83,6 +84,7 @@ async function configFor(
   const plugin = nuxtModule(options).find(
     (p) => p.name === 'nuxt-module:config',
   )!;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Vite types the config hook with a plugin context and a union of results, and this test calls it with none because the plugin's hook reads none
   const hook = plugin.config as (
     c: UserConfig,
     env: ConfigEnv,
@@ -149,10 +151,10 @@ describe('the Vite config the plugin adds', () => {
 
   it('names shared chunks like @nuxt/module-builder', async () => {
     const config = await configFor(await packageRoot());
-    const output = config.build?.rolldownOptions?.output as {
-      chunkFileNames: string;
-    };
-    expect(output.chunkFileNames).toBe('shared/[name].[hash].mjs');
+    const chunkOutput = config.build?.rolldownOptions?.output;
+    expect(
+      Array.isArray(chunkOutput) ? undefined : chunkOutput?.chunkFileNames,
+    ).toBe('shared/[name].[hash].mjs');
   });
 
   it("leaves the settings the project's own Vite config makes to it", async () => {
@@ -177,7 +179,7 @@ describe('the Vite config the plugin adds', () => {
   });
 
   it('keeps a logger the project set', async () => {
-    const customLogger = {} as Logger;
+    const customLogger = createLogger('silent');
     const config = await configFor(await packageRoot(), {}, { customLogger });
     expect(config.customLogger).toBeUndefined();
   });
@@ -218,7 +220,7 @@ describe('the Vite config the plugin adds', () => {
   it('describes the same build whoever calls it', async () => {
     const root = await packageRoot();
     const o = await resolveOptions({}, root);
-    const logger = {} as Logger;
+    const logger = createLogger('silent');
     const awaited1 = await buildConfig(o, {}, logger, { failed: false });
     expect(awaited1.build?.rolldownOptions?.cwd).toBe(root);
   });

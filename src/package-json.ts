@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { isRecord } from './is-record.js';
 
 /** The `package.json` fields this package reads. */
 export interface PackageJson {
@@ -15,11 +16,53 @@ export interface PackageJson {
   readonly [field: string]: unknown;
 }
 
+/** The value of a field that must be a string, or undefined when it is anything else. */
+function stringField(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+/** The value of a field that must map names to strings (the dependency lists), or undefined when it does not. */
+function stringMapField(value: unknown): Record<string, string> | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const entries = Object.entries(value).filter(
+    (entry): entry is [string, string] => typeof entry[1] === 'string',
+  );
+  return entries.length === Object.keys(value).length
+    ? Object.fromEntries(entries)
+    : undefined;
+}
+
+/**
+ * Parses the text of a `package.json`: the fields this package reads keep their value only when it
+ * has the type the field is declared with.
+ * @param text - The JSON text of the manifest.
+ * @returns The manifest.
+ * @throws {TypeError} When the text is not a JSON object.
+ */
+export function parsePackageJson(text: string): PackageJson {
+  const json: unknown = JSON.parse(text);
+  if (!isRecord(json)) {
+    throw new TypeError('a package.json must hold a JSON object');
+  }
+  return {
+    ...json,
+    name: stringField(json.name),
+    version: stringField(json.version),
+    type: stringField(json.type),
+    dependencies: stringMapField(json.dependencies),
+    devDependencies: stringMapField(json.devDependencies),
+    peerDependencies: stringMapField(json.peerDependencies),
+    optionalDependencies: stringMapField(json.optionalDependencies),
+  };
+}
+
 /** The `package.json` of the package at `root`. */
 export async function readPackageJson(root: string): Promise<PackageJson> {
-  return JSON.parse(
+  return parsePackageJson(
     await readFile(path.resolve(root, 'package.json'), 'utf8'),
-  ) as PackageJson;
+  );
 }
 
 /** Whether the package at `root` is an ES module package (`"type": "module"`). */
@@ -46,7 +89,7 @@ function strings(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value.flatMap((item) => strings(item));
   }
-  if (value && typeof value === 'object') {
+  if (isRecord(value)) {
     return Object.values(value).flatMap((item) => strings(item));
   }
   return [];

@@ -61,7 +61,9 @@ export function nuxtModule(options: NuxtModuleOptions = {}): Plugin[] {
       const o = await resolveOptions(options, root, user);
       resolved = o;
       if (o.prepare) {
-        await prepareModule(root, o.entry.module ?? '');
+        // The entry map has a `module` key only when the module has an entry, whatever its index type says.
+        const moduleEntry = new Map(Object.entries(o.entry)).get('module');
+        await prepareModule(root, moduleEntry ?? '');
       }
       // A module's tsconfig usually extends `.nuxt/tsconfig.json`, which only a prepare writes.
       await optionalTsconfig(root, o.tsconfig, o.dts || o.prepare);

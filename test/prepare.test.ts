@@ -11,6 +11,7 @@ import nodePath from 'node:path';
 import { afterEach, describe, expect, it } from '@jest/globals';
 
 import { PREPARE_OVERRIDES, prepareModule } from '../src/prepare.js';
+import { isRecord } from '../src/is-record.js';
 
 const INSTALLED_IN_PATTERN = /installed in/u;
 const MODULE_SETUP_FAILED_PATTERN = /module setup failed/u;
@@ -65,10 +66,30 @@ interface LoadedState {
   modules: string[];
 }
 
-const loaded = async (root: string): Promise<LoadedState> =>
-  JSON.parse(
+/** Whether a parsed `loaded.json` has the shape of {@link LoadedState}. */
+function isLoadedState(value: unknown): value is LoadedState {
+  if (!isRecord(value) || !isRecord(value.overrides)) {
+    return false;
+  }
+  return (
+    typeof value.cli === 'string' &&
+    typeof value.cwd === 'string' &&
+    Array.isArray(value.modules) &&
+    Array.isArray(value.overrides.modules)
+  );
+}
+
+const loaded = async (root: string): Promise<LoadedState> => {
+  const state: unknown = JSON.parse(
     await readFile(nodePath.join(root, 'loaded.json'), 'utf8'),
-  ) as LoadedState;
+  );
+  if (!isLoadedState(state)) {
+    throw new TypeError(
+      'the fake nuxi recorded a state of an unexpected shape',
+    );
+  }
+  return state;
+};
 
 describe('prepareModule', () => {
   it("writes the module's .nuxt types", async () => {

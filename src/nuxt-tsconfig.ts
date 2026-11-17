@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { NUXT_BUILD_DIR, PROJECT_TSCONFIG } from './defaults.js';
 import { exists, firstFound } from './exists.js';
+import { isRecord } from './is-record.js';
 import { anyTypeScript } from './resolve.js';
 import { packageTsconfig } from './tsconfig.js';
 import type { TS } from './tsconfig.js';
@@ -10,6 +11,18 @@ import type { TS } from './tsconfig.js';
 interface TsconfigJson {
   readonly references?: readonly { readonly path: string }[];
   readonly extends?: unknown;
+}
+
+/** Whether a parsed tsconfig has the `references` this module reads: a list of objects with a `path`. */
+function isTsconfigJson(value: unknown): value is TsconfigJson {
+  return (
+    isRecord(value) &&
+    (value.references === undefined ||
+      (Array.isArray(value.references) &&
+        value.references.every(
+          (ref: unknown) => isRecord(ref) && typeof ref.path === 'string',
+        )))
+  );
 }
 
 const isFile = async (p: string): Promise<boolean> =>
@@ -36,7 +49,13 @@ export async function missingTsconfigFile(
       `cannot read ${file}: ${ts.flattenDiagnosticMessageText(read.error.messageText, '\n')}`,
     );
   }
-  const json = (read.config ?? {}) as TsconfigJson;
+  const config: unknown = read.config ?? {};
+  if (!isTsconfigJson(config)) {
+    throw new TypeError(
+      `cannot read ${file}: its references are not a list of paths`,
+    );
+  }
+  const json = config;
   const missingReference = await firstFound(
     json.references ?? [],
     async (ref) => {

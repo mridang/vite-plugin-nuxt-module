@@ -8,6 +8,7 @@ import {
   isAllowed,
   WARNINGS_PLUGIN,
 } from '../src/warnings.js';
+import { call, callAsync } from './utils/hooks.js';
 import type { ResolvedConfig } from 'vite';
 
 describe('isAllowed', () => {
@@ -123,16 +124,6 @@ describe('failOnWarnings outcome', () => {
   });
 });
 
-/** Calls a plugin hook that may be a function or an `{ handler }` object. */
-function call(hook: unknown, ...args: unknown[]): void {
-  type Hook = (...args: unknown[]) => void;
-  const fn =
-    typeof hook === 'function'
-      ? (hook as Hook)
-      : (hook as { handler: Hook }).handler;
-  return fn.apply({}, args);
-}
-
 describe('failOnLoggedWarnings', () => {
   it('fails the build on a warning Vite logged while resolving the config', () => {
     const outcome = { failed: false };
@@ -151,7 +142,7 @@ describe('failOnLoggedWarnings', () => {
     const { customLogger, plugin } = failOnLoggedWarnings({ failed: false });
     call(plugin.config, { logLevel: 'silent' });
     customLogger.warnOnce('chunk is large');
-    await expect(call(plugin.closeBundle)).rejects.toThrow(
+    await expect(callAsync(plugin.closeBundle)).rejects.toThrow(
       'Vite warned:\nchunk is large',
     );
   });
@@ -179,7 +170,7 @@ describe('failOnLoggedWarnings', () => {
     call(plugin.config, { logLevel: 'silent' });
     call(plugin.configResolved, { build: { watch: {} }, logger: { error } });
     customLogger.warn('chunk is large');
-    await expect(call(plugin.closeBundle)).resolves.toBeUndefined();
+    await expect(callAsync(plugin.closeBundle)).resolves.toBeUndefined();
     expect(error).toHaveBeenCalledWith(
       `[${WARNINGS_PLUGIN}] Vite warned:\nchunk is large`,
       expect.anything(),
@@ -195,17 +186,16 @@ describe('failOnLoggedWarnings', () => {
 });
 
 describe('afterBuild', () => {
-  const resolved = (outcome: { failed: boolean }) =>
-    ({
-      plugins: [{ name: WARNINGS_PLUGIN, api: { outcome } }],
-    }) as unknown as ResolvedConfig;
+  const resolved = (outcome: { failed: boolean }) => ({
+    plugins: [{ name: WARNINGS_PLUGIN, api: { outcome } }],
+  });
 
   it('runs the step once the bundle is written', async () => {
     const step = jest.fn<(config: ResolvedConfig) => void>();
     const plugin = afterBuild('x', step);
     const config = resolved({ failed: false });
     call(plugin.configResolved, config);
-    await expect(call(plugin.closeBundle)).resolves.toBeUndefined();
+    await expect(callAsync(plugin.closeBundle)).resolves.toBeUndefined();
     expect(step.mock.calls).toEqual([[config]]);
   });
 
@@ -213,7 +203,7 @@ describe('afterBuild', () => {
     const step = jest.fn<(config: ResolvedConfig) => void>();
     const plugin = afterBuild('x', step);
     call(plugin.configResolved, resolved({ failed: true }));
-    await expect(call(plugin.closeBundle)).resolves.toBeUndefined();
+    await expect(callAsync(plugin.closeBundle)).resolves.toBeUndefined();
     expect(step.mock.calls).toEqual([]);
   });
 
@@ -224,10 +214,10 @@ describe('afterBuild', () => {
     call(plugin.configResolved, config);
     call(plugin.buildStart);
     call(plugin.buildEnd, new Error('x'));
-    await expect(call(plugin.closeBundle)).resolves.toBeUndefined();
+    await expect(callAsync(plugin.closeBundle)).resolves.toBeUndefined();
     call(plugin.buildStart);
     call(plugin.buildEnd);
-    await expect(call(plugin.closeBundle)).resolves.toBeUndefined();
+    await expect(callAsync(plugin.closeBundle)).resolves.toBeUndefined();
     expect(step.mock.calls).toEqual([[config]]);
   });
 
@@ -236,7 +226,7 @@ describe('afterBuild', () => {
       throw new Error('TS2322');
     });
     call(plugin.configResolved, { build: {}, plugins: [] });
-    await expect(call(plugin.closeBundle)).rejects.toThrow('TS2322');
+    await expect(callAsync(plugin.closeBundle)).rejects.toThrow('TS2322');
   });
 
   it("logs a failing step's error under --watch instead of rejecting", async () => {
@@ -249,7 +239,7 @@ describe('afterBuild', () => {
       logger: { error },
       plugins: [],
     });
-    await expect(call(plugin.closeBundle)).resolves.toBeUndefined();
+    await expect(callAsync(plugin.closeBundle)).resolves.toBeUndefined();
     expect(error).toHaveBeenCalledWith('[x] TS2322', expect.anything());
   });
 
@@ -267,8 +257,8 @@ describe('afterBuild', () => {
         plugins: [{ name: WARNINGS_PLUGIN, api: { outcome } }],
       });
     }
-    await expect(call(first.closeBundle)).resolves.toBeUndefined();
-    await expect(call(second.closeBundle)).resolves.toBeUndefined();
+    await expect(callAsync(first.closeBundle)).resolves.toBeUndefined();
+    await expect(callAsync(second.closeBundle)).resolves.toBeUndefined();
     expect(step.mock.calls).toEqual([]);
   });
 
@@ -277,10 +267,10 @@ describe('afterBuild', () => {
     ['renderError', new Error('x')],
   ])('skips the step after %s reports an error', async (hook, error) => {
     const step = jest.fn<(config: ResolvedConfig) => void>();
-    const plugin = afterBuild('x', step) as unknown as Record<string, unknown>;
+    const plugin = afterBuild('x', step);
     call(plugin.configResolved, { plugins: [] });
-    call(plugin[hook], error);
-    await expect(call(plugin.closeBundle)).resolves.toBeUndefined();
+    call(hook === 'buildEnd' ? plugin.buildEnd : plugin.renderError, error);
+    await expect(callAsync(plugin.closeBundle)).resolves.toBeUndefined();
     expect(step.mock.calls).toEqual([]);
   });
 });

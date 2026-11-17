@@ -41,13 +41,14 @@ export function absolutePaths(
   options: TypeScript.CompilerOptions,
   tsconfig: string,
 ): Record<string, string[]> {
+  // eslint-disable-next-line sonarjs/deprecation, @typescript-eslint/no-deprecated -- user tsconfigs may still set baseUrl and it must keep resolving paths
+  const { baseUrl, pathsBasePath, paths } = options;
   const base =
-    // eslint-disable-next-line sonarjs/deprecation, @typescript-eslint/no-deprecated -- user tsconfigs may still set baseUrl and it must keep resolving paths
-    options.baseUrl ??
-    (options.pathsBasePath as string | undefined) ??
+    baseUrl ??
+    (typeof pathsBasePath === 'string' ? pathsBasePath : undefined) ??
     path.dirname(tsconfig);
   return Object.fromEntries(
-    Object.entries(options.paths ?? {}).map(([key, targets]) => [
+    Object.entries(paths ?? {}).map(([key, targets]) => [
       key,
       targets.map((target) => path.resolve(base, target)),
     ]),
