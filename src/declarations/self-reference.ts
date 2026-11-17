@@ -8,6 +8,7 @@ import { readPackageJson } from '../package-json.js';
 import { packageTypeScript } from '../resolve.js';
 import { absolutePaths, parsedTsconfig } from '../tsconfig.js';
 import { walk } from '../walk.js';
+import { isRecord } from '../is-record.js';
 
 const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/u;
 
@@ -25,14 +26,13 @@ export function typesTarget(entry: unknown): string | undefined {
   if (typeof entry === 'string') {
     return DECLARATION_FILE_PATTERN.test(entry) ? entry : undefined;
   }
-  if (!entry || typeof entry !== 'object') {
+  if (!isRecord(entry)) {
     return undefined;
   }
-  const conditions = entry as Record<string, unknown>;
-  if (typeof conditions.types === 'string') {
-    return conditions.types;
+  if (typeof entry.types === 'string') {
+    return entry.types;
   }
-  return Object.values(conditions)
+  return Object.values(entry)
     .values()
     .map((nested) => typesTarget(nested))
     .find(Boolean);
@@ -75,15 +75,16 @@ export async function selfReferenceOptions(
   entries: Readonly<Record<string, string>> = {},
 ): Promise<SelfReferenceOptions> {
   const pkg = await readPackageJson(root);
-  if (!pkg.name || !pkg.exports || typeof pkg.exports !== 'object') {
+  const exportsField = pkg.exports;
+  if (!pkg.name || !isRecord(exportsField)) {
     return {};
   }
   if (!(await importsItself(entryRoot, pkg.name))) {
     return {};
   }
-  const map = Object.keys(pkg.exports).some((k) => k.startsWith('.'))
-    ? (pkg.exports as Record<string, unknown>)
-    : { '.': pkg.exports };
+  const map = Object.keys(exportsField).some((k) => k.startsWith('.'))
+    ? exportsField
+    : { '.': exportsField };
   const found = await Promise.all(
     Object.entries(map).map(
       async ([sub, target]): Promise<readonly [string, string] | undefined> => {

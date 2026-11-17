@@ -3,6 +3,8 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { exists } from './exists.js';
+import { isRecord } from './is-record.js';
+import { parsePackageJson } from './package-json.js';
 import type TypeScript from 'typescript';
 
 const PACKAGE_SPECIFIER_PATTERN = /^((?:@[^/]+\/)?[^/]+)(\/.*)?$/u;
@@ -64,15 +66,12 @@ export function exportsTarget(
   subpath: string,
   conditions: readonly string[] = IMPORT_CONDITIONS,
 ): string | undefined {
-  const isMap =
-    !!exportsField &&
-    typeof exportsField === 'object' &&
+  const map =
+    isRecord(exportsField) &&
     !Array.isArray(exportsField) &&
-    Object.keys(exportsField).some((key) => key.startsWith('.'));
-  const map = (isMap ? exportsField : { '.': exportsField }) as Record<
-    string,
-    unknown
-  >;
+    Object.keys(exportsField).some((key) => key.startsWith('.'))
+      ? exportsField
+      : { '.': exportsField };
   if (subpath in map) {
     return exportTarget(map[subpath], conditions);
   }
@@ -151,11 +150,9 @@ async function resolvePackageFile(
   if (subpath === './package.json') {
     return path.join(dir, 'package.json');
   }
-  const pkg = JSON.parse(
+  const pkg = parsePackageJson(
     await readFile(path.join(dir, 'package.json'), 'utf8'),
-  ) as {
-    exports?: unknown;
-  };
+  );
   if (pkg.exports !== undefined) {
     const target =
       exportsTarget(pkg.exports, subpath) ??
@@ -191,7 +188,7 @@ export async function importFromRoot<T = unknown>(
   specifier: string,
   root: string = process.cwd(),
 ): Promise<T> {
-  // eslint-disable-next-line no-unsanitized/method -- the specifier is a tool the package declares
+  // eslint-disable-next-line no-unsanitized/method, @typescript-eslint/no-unsafe-type-assertion -- the specifier is a tool the package declares, and the caller names the type of that module, which a dynamic import cannot check
   return (await import(
     pathToFileURL(await resolvePackageFile(specifier, root)).href
   )) as T;
@@ -201,6 +198,7 @@ export async function importFromRoot<T = unknown>(
 export async function packageTypeScript(
   root: string,
 ): Promise<typeof TypeScript> {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- require returns the compiler installed in the package being built, and nothing can check that it is the version the types describe
   return requireFrom(root)(
     await resolvePackageFile('typescript', root),
   ) as typeof TypeScript;
@@ -213,6 +211,7 @@ export async function packageTypeScript(
  */
 export async function anyTypeScript(root: string): Promise<typeof TypeScript> {
   return (await resolveFromRoot('typescript', root)) === undefined
-    ? (createRequire(import.meta.url)('typescript') as typeof TypeScript)
+    ? // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- require returns the optional peer compiler this package resolves, and nothing can check that it is the version the types describe
+      (createRequire(import.meta.url)('typescript') as typeof TypeScript)
     : packageTypeScript(root);
 }

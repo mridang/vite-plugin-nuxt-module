@@ -37,8 +37,8 @@ async function scanExports(declaration: string): Promise<{
 }> {
   const { program } = await parse('module.ts', declaration, { lang: 'ts' });
   const statements: unknown = program.body;
-  const reexports = (statements as readonly Statement[]).flatMap(
-    (node): Reexport[] => {
+  const reexports = (Array.isArray(statements) ? statements : []).flatMap(
+    (node: Statement): Reexport[] => {
       if (node.type === 'ExportNamedDeclaration') {
         const id =
           node.declaration?.id?.name ??

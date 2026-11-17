@@ -12,6 +12,7 @@ import {
   STRING_ASSET_IMPORT,
 } from '../../src/declarations/bundle.js';
 import { pathExists } from '../utils/fs.js';
+import { isRecord } from '../../src/is-record.js';
 import type { RolldownPlugin } from 'rolldown';
 
 const TYPE_ERROR_TS2322_PATTERN = /1 type error\(s\)[\s\S]*TS2322/u;
@@ -227,11 +228,13 @@ describe('emitBundledTypes assets', () => {
   it('maps every declaration to a file that exists', async () => {
     const root = await assetPackage();
     await emit(root);
-    const { sources } = JSON.parse(
+    const sourceMap: unknown = JSON.parse(
       await output(root, 'dist/index.d.mts.map'),
-    ) as {
-      sources: string[];
-    };
+    );
+    const sources =
+      isRecord(sourceMap) && Array.isArray(sourceMap.sources)
+        ? sourceMap.sources.filter((source) => typeof source === 'string')
+        : [];
     const exists = await Promise.all(
       sources.map(async (source) =>
         pathExists(path.resolve(root, 'dist', source)),
@@ -314,7 +317,7 @@ describe('ASSET_IMPORT as rebuilt from its parts', () => {
     ];
     for (let index = 0; index < 20_000; index += 1) {
       let specifier = '';
-      for (let index = 0; index < 5; index += 1) {
+      for (let position = 0; position < 5; position += 1) {
         specifier += pieces[Math.floor(random() * pieces.length)];
       }
       expect(ASSET_IMPORT.test(specifier)).toBe(old.test(specifier));

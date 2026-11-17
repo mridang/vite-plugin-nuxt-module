@@ -113,16 +113,10 @@ describe('buildRuntime', () => {
 
 describe('declarationRuntimeExternals', () => {
   const resolveId = async (root: string, id: string) =>
-    (
-      (
-        declarationRuntimeExternals(nodePath.join(root, 'src/runtime')) as {
-          resolveId: unknown;
-        }
-      ).resolveId as (
-        id: string,
-        importer: string,
-      ) => Promise<{ id: string; external: boolean } | null>
-    )(id, nodePath.join(root, 'src/index.ts'));
+    declarationRuntimeExternals(nodePath.join(root, 'src/runtime')).resolveId(
+      id,
+      nodePath.join(root, 'src/index.ts'),
+    );
 
   it.each([['./runtime/composables/use'], ['./runtime/composables/use.js']])(
     'imports the runtime file %s is written for instead of inlining its types',

@@ -49,6 +49,7 @@ function checkedProject(
 ): ParsedCommandLine {
   return parsedTsconfig(ts, tsconfig, {
     ...CONSUMER_COMPILER_OPTIONS,
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the overrides are compiler options the user wrote in their own config, and TypeScript offers no check that their values are the ones it expects
     ...(overrides as CompilerOptions),
     noEmit: true,
     composite: false,

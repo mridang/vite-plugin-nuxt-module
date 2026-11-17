@@ -17,6 +17,8 @@ import {
   sharedChunkFileNames,
   writeCompatibleDeclarations,
 } from '../src/outputs.js';
+import { isRecord } from '../src/is-record.js';
+import { parsePackageJson } from '../src/package-json.js';
 import {
   buildFixture,
   fixture,
@@ -24,6 +26,7 @@ import {
   withTools,
 } from './utils/fixture.js';
 import { pathExists } from './utils/fs.js';
+import { call, callAsync } from './utils/hooks.js';
 import type { Logger } from 'vite';
 
 /** A module package of `files` that installs this package's own TypeScript, as the declaration steps type with it. */
@@ -261,13 +264,13 @@ describe('nuxtModuleOutputs', () => {
       sourcemap: false,
       allowWarnings: [],
     }));
-    (plugin.configResolved as unknown as (c: unknown) => void)({
+    call(plugin.configResolved, {
       root,
       build: { outDir: 'dist' },
       plugins: [],
     });
-    (plugin.buildEnd as unknown as (error: Error) => void)(new Error('x'));
-    await (plugin.closeBundle as unknown as () => Promise<void>)();
+    call(plugin.buildEnd, new Error('x'));
+    await callAsync(plugin.closeBundle);
     expect(await pathExists(nodePath.join(root, 'dist/module.json'))).toBe(
       false,
     );
@@ -282,14 +285,16 @@ describe('nuxtModuleOutputs', () => {
   }, 60_000);
 
   it('declares a module that depends on @nuxt/kit only when its tsconfig sets declaration', async () => {
-    const tsconfig = JSON.parse(starterModule['tsconfig.json']) as {
-      compilerOptions: Record<string, unknown>;
-    };
+    const parsed: unknown = JSON.parse(starterModule['tsconfig.json']);
+    const tsconfig = isRecord(parsed) ? parsed : {};
+    const compilerOptions = isRecord(tsconfig.compilerOptions)
+      ? tsconfig.compilerOptions
+      : {};
     const root = await tree({
       ...starterModule,
       'tsconfig.json': JSON.stringify({
         ...tsconfig,
-        compilerOptions: { ...tsconfig.compilerOptions, declaration: true },
+        compilerOptions: { ...compilerOptions, declaration: true },
       }),
     });
     await buildModule(root);
@@ -358,17 +363,15 @@ describe('nuxtModuleOutputs', () => {
   ])(
     'writes module.json, and types.d.mts when the exports %j name it',
     async (exportsMap, typesEntry) => {
-      const pkg = JSON.parse(starterModule['package.json']) as object;
+      const pkg = parsePackageJson(starterModule['package.json']);
       const root = await tree({
         ...starterModule,
         'package.json': JSON.stringify({ ...pkg, exports: exportsMap }),
       });
       await buildModule(root);
       expect([
-        (
-          JSON.parse(
-            await readFile(nodePath.join(root, 'dist/module.json'), 'utf8'),
-          ) as { name: string }
+        parsePackageJson(
+          await readFile(nodePath.join(root, 'dist/module.json'), 'utf8'),
         ).name,
         await pathExists(nodePath.join(root, 'dist/types.d.mts')),
       ]).toEqual(['starter', typesEntry]);

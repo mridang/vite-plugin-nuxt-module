@@ -149,16 +149,16 @@ export async function transformSfc(
   relativeFile: string,
 ): Promise<string> {
   const transformer = await vueTransformer(root);
-  const [sfc] =
-    (await transformer.vueLoader(
-      {
-        extension: '.vue',
-        path: from,
-        srcPath: from,
-        getContents: async () => readFile(from, 'utf8'),
-      },
-      { options: { esbuild: {} }, loadFile: sfcSnippetLoader(root) },
-    )) ?? [];
+  const sfcs = await transformer.vueLoader(
+    {
+      extension: '.vue',
+      path: from,
+      srcPath: from,
+      getContents: async () => readFile(from, 'utf8'),
+    },
+    { options: { esbuild: {} }, loadFile: sfcSnippetLoader(root) },
+  );
+  const sfc = sfcs?.at(0);
   if (!sfc) {
     throw new Error(`vue-sfc-transformer returned nothing for ${relativeFile}`);
   }

@@ -1,6 +1,7 @@
 import { stripVTControlCharacters } from 'node:util';
 import { createLogger } from 'vite';
 import { PLUGIN_PREFIX } from './defaults.js';
+import { isRecord } from './is-record.js';
 import type { Logger, Plugin, ResolvedConfig } from 'vite';
 
 /** The parts of a bundler log or warning the warning policy reads. */
@@ -110,6 +111,11 @@ interface WarningsApi {
   readonly outcome: BuildOutcome;
 }
 
+/** Whether a plugin's `api` is the one the warnings plugin shares. */
+function isWarningsApi(api: unknown): api is WarningsApi {
+  return isRecord(api) && isRecord(api.outcome);
+}
+
 /** The logger that records Vite's warnings, and the plugin that fails the build on them. */
 export interface LoggedWarnings {
   readonly customLogger: Logger;
@@ -196,10 +202,11 @@ export function failOnLoggedWarnings(outcome: BuildOutcome): LoggedWarnings {
     closeBundle: {
       order: 'pre',
       async handler() {
-        if (!resolved?.build.watch) {
-          return check();
+        if (resolved?.build.watch) {
+          await closeStep(resolved, WARNINGS_PLUGIN, check);
+        } else {
+          check();
         }
-        return closeStep(resolved, WARNINGS_PLUGIN, check);
       },
     },
   };
@@ -263,8 +270,10 @@ function onClose(
     apply: 'build',
     configResolved(resolved) {
       config = resolved;
-      const shared = resolved.plugins.find((p) => p.name === WARNINGS_PLUGIN)
-        ?.api as WarningsApi | undefined;
+      const api: unknown = resolved.plugins.find(
+        (p) => p.name === WARNINGS_PLUGIN,
+      )?.api;
+      const shared = isWarningsApi(api) ? api : undefined;
       if (shared) {
         outcome = shared.outcome;
       }

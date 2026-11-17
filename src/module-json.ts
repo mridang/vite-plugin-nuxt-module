@@ -4,7 +4,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { version } from 'vite';
 
 import { MODULE_JSON } from './defaults.js';
-import { readPackageJson } from './package-json.js';
+import { parsePackageJson, readPackageJson } from './package-json.js';
+import { isRecord } from './is-record.js';
 
 /** What a built Nuxt module's default export may tell about itself. */
 interface ModuleExport {
@@ -19,15 +20,34 @@ async function ownPackage(): Promise<{
   readonly name: string;
   readonly version: string;
 }> {
-  return JSON.parse(
+  const { name, version: ownVersion } = parsePackageJson(
     await readFile(
       fileURLToPath(new URL('../package.json', import.meta.url)),
       'utf8',
     ),
-  ) as {
-    name: string;
-    version: string;
-  };
+  );
+  if (name === undefined || ownVersion === undefined) {
+    throw new TypeError(
+      'the package.json of this package has no name or version',
+    );
+  }
+  return { name, version: ownVersion };
+}
+
+/** Whether a loaded module has the shape of {@link ModuleExport}: a default export that may offer `getMeta`. */
+function isModuleExport(value: unknown): value is ModuleExport {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const exported = value.default;
+  if (exported === undefined) {
+    return true;
+  }
+  // A Nuxt module is a function that carries `getMeta`, so the default export may be either.
+  if (typeof exported !== 'function' && !isRecord(exported)) {
+    return false;
+  }
+  return !('getMeta' in exported) || typeof exported.getMeta === 'function';
 }
 
 /** The tools a module was built with, as `module.json` records them: this plugin and Vite. */
@@ -63,10 +83,12 @@ export async function writeModuleJson(o: {
 }): Promise<void> {
   const file = path.join(o.outDir, `module${o.extension}`);
   // eslint-disable-next-line no-unsanitized/method -- loads the module this build just wrote
-  const loadedModule = (await import(
+  const loadedModule: unknown = await import(
     `${pathToFileURL(file).href}?t=${Date.now()}`
-  )) as ModuleExport;
-  const meta = (await loadedModule.default?.getMeta?.()) ?? {};
+  );
+  const meta = isModuleExport(loadedModule)
+    ? ((await loadedModule.default?.getMeta?.()) ?? {})
+    : {};
   const json = await moduleJson(
     meta,
     await readPackageJson(o.root),

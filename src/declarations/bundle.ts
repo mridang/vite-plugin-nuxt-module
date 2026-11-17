@@ -9,6 +9,7 @@ import {
 } from '../defaults.js';
 import { noBuildPaths } from '../no-build-paths.js';
 import { failOnDeclarationWarnings } from '../warnings.js';
+import { isRecord } from '../is-record.js';
 import { declarationTypeErrors, sourceTypeErrors } from './check.js';
 import { finishedDeclarations } from './rendered.js';
 import { selfReferenceOptions } from './self-reference.js';
@@ -85,9 +86,9 @@ function declarationAssets(): RolldownPlugin {
       };
     },
     load(id: string) {
-      const suffix = Object.keys(DECLARATION_SUFFIXES).find((s) =>
-        id.endsWith(s),
-      ) as keyof typeof DECLARATION_SUFFIXES | undefined;
+      const suffix = Object.keys(DECLARATION_SUFFIXES).find(
+        (s): s is keyof typeof DECLARATION_SUFFIXES => id.endsWith(s),
+      );
       if (!suffix) {
         return null;
       }
@@ -140,8 +141,8 @@ export function mergedCompilerOptions(
   b: CompilerOverrides = {},
 ): CompilerOverrides {
   const paths = {
-    ...(a.paths as object | undefined),
-    ...(b.paths as object | undefined),
+    ...(isRecord(a.paths) ? a.paths : {}),
+    ...(isRecord(b.paths) ? b.paths : {}),
   };
   return { ...a, ...b, ...(Object.keys(paths).length > 0 ? { paths } : {}) };
 }

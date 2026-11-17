@@ -74,7 +74,7 @@ describe('the built package', () => {
   it('is a publishable package', async () => {
     const { messages } = await publint({ pkgDir: installed(), strict: true });
     expect(
-      messages.map((message) => formatMessage(message, { pkg: {} as never })),
+      messages.map((message) => formatMessage(message, { pkg: {} })),
     ).toEqual([]);
   });
 
@@ -160,7 +160,7 @@ describe('the module in a Nuxt app', () => {
       (m) => m[1],
     );
     const pages = await Promise.all(
-      hrefs.map(async (href) => $fetch<string>(href ?? '')),
+      hrefs.map(async (href) => $fetch<string>(href)),
     );
     const linked = pages.join('\n');
     // The global stylesheet is a file of the module; the component's scoped style is inlined into the page.
@@ -195,10 +195,10 @@ describe('the module in a Nuxt app', () => {
   });
 
   it('times every response in server middleware and marks it in a Nitro plugin', async () => {
-    for (const path of ['/', '/api/hello-timing/hello', '/hello']) {
-      const response = await fetch(path);
-      expect([path, response.headers.get('server-timing')]).toEqual([
-        path,
+    for (const route of ['/', '/api/hello-timing/hello', '/hello']) {
+      const response = await fetch(route);
+      expect([route, response.headers.get('server-timing')]).toEqual([
+        route,
         expect.stringMatching(SERVER_TIMING_PATTERN),
       ]);
       expect(response.headers.get('x-hello-plugin')).toBe('1');
