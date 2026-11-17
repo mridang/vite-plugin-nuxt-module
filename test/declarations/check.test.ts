@@ -9,9 +9,9 @@ import {
   sourceTypeErrors,
 } from '../../src/declarations/check.js';
 
-const INDEX_TS2322_ERROR_PATTERN = /^src\/index\.ts\(1,14\): error TS2322/;
-const TS2688_PATTERN = /TS2688/;
-const DIST_TS2503_ERROR_PATTERN = /dist\/index\.d\.mts\(1,17\): error TS2503/;
+const INDEX_TS2322_ERROR_PATTERN = /^src\/index\.ts\(1,14\): error TS2322/u;
+const TS2688_PATTERN = /TS2688/u;
+const DIST_TS2503_ERROR_PATTERN = /dist\/index\.d\.mts\(1,17\): error TS2503/u;
 
 /** The compiler options of {@link FIXTURE_TSCONFIG}. */
 const fixtureOptions = (

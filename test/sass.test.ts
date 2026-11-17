@@ -5,7 +5,7 @@ import { describe, expect, it } from '@jest/globals';
 
 import { compileSass, packageSass } from '../src/sass.js';
 
-const SASS_MISSING_PATTERN = /none of sass, sass-embedded is installed/;
+const SASS_MISSING_PATTERN = /none of sass, sass-embedded is installed/u;
 
 /** A package root with a fake Sass installed: `compile` reports the options it was called with. */
 async function withSass(name: string, source: string): Promise<string> {

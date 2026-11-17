@@ -26,10 +26,8 @@ export const NODE_TARGET = 'node20';
  * resolves them, through their published types. A custom condition (a workspace's source
  * condition) would pull a dependency's sources into the program, outside `rootDir`.
  */
-export const CONSUMER_COMPILER_OPTIONS: {
-  readonly customConditions: string[];
-} = {
-  customConditions: [],
+export const CONSUMER_COMPILER_OPTIONS = {
+  customConditions: [] as string[],
 };
 
 /** Source files that are tests, relative to a source root: never shipped, never typed. */
@@ -59,14 +57,14 @@ export const NUXT_SOURCEMAP = false;
 
 /** The matchers a Nuxt module's own bundle never inlines: Nuxt provides (or compiles) these in the app. */
 export const NUXT_EXTERNALS: readonly (string | RegExp)[] = [
-  /^#/,
-  /^@nuxt\//,
-  /^nuxt(-nightly|-edge|3)?($|\/)/,
-  /^h3($|\/)/,
-  /^nitropack($|\/)/,
-  /^nitro($|\/)/,
-  /^vue($|\/)/,
-  /^vue-demi($|\/)/,
+  /^#/u,
+  /^@nuxt\//u,
+  /^nuxt(-nightly|-edge|3)?($|\/)/u,
+  /^h3($|\/)/u,
+  /^nitropack($|\/)/u,
+  /^nitro($|\/)/u,
+  /^vue($|\/)/u,
+  /^vue-demi($|\/)/u,
 ];
 
 /** The `module.json` file name `@nuxt/module-builder` writes next to the module. */

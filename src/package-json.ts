@@ -40,10 +40,15 @@ const PUBLISHED_FIELDS = [
 
 /** Every string a JSON value holds, nested ones included. */
 function strings(value: unknown): string[] {
-  if (typeof value === 'string') return [value];
-  if (Array.isArray(value)) return value.flatMap((item) => strings(item));
-  if (value && typeof value === 'object')
+  if (typeof value === 'string') {
+    return [value];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => strings(item));
+  }
+  if (value && typeof value === 'object') {
     return Object.values(value).flatMap((item) => strings(item));
+  }
   return [];
 }
 

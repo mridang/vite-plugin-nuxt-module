@@ -1,4 +1,3 @@
-import type { ResolvedConfig } from 'vite';
 import { describe, expect, it, jest } from '@jest/globals';
 
 import {
@@ -9,6 +8,7 @@ import {
   isAllowed,
   WARNINGS_PLUGIN,
 } from '../src/warnings.js';
+import type { ResolvedConfig } from 'vite';
 
 describe('isAllowed', () => {
   it.each([
@@ -45,7 +45,9 @@ describe('failOnWarnings', () => {
       { code: 'EVAL', message: 'm' },
       handler,
     );
-    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls).toEqual([
+      ['warn', { code: 'EVAL', message: 'm' }],
+    ]);
   });
 
   it('passes a plugin warning allowed by the code its plugin gave it', () => {
@@ -55,7 +57,12 @@ describe('failOnWarnings', () => {
       { code: 'PLUGIN_WARNING', pluginCode: 'OWN_CODE', message: 'm' },
       handler,
     );
-    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls).toEqual([
+      [
+        'warn',
+        { code: 'PLUGIN_WARNING', pluginCode: 'OWN_CODE', message: 'm' },
+      ],
+    ]);
   });
 
   it('names a failing plugin warning by the code that would allow it', () => {
@@ -83,7 +90,7 @@ describe('failOnDeclarationWarnings', () => {
       { code: 'PLUGIN_TIMINGS', message: 'm' },
       handler,
     );
-    expect(handler).not.toHaveBeenCalled();
+    expect(handler.mock.calls).toEqual([]);
   });
 
   it('passes a plugin warning allowed by the code its plugin gave it', () => {
@@ -93,7 +100,12 @@ describe('failOnDeclarationWarnings', () => {
       { code: 'PLUGIN_WARNING', pluginCode: 'OWN_CODE', message: 'm' },
       handler,
     );
-    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls).toEqual([
+      [
+        'warn',
+        { code: 'PLUGIN_WARNING', pluginCode: 'OWN_CODE', message: 'm' },
+      ],
+    ]);
   });
 });
 
@@ -112,8 +124,8 @@ describe('failOnWarnings outcome', () => {
 });
 
 /** Calls a plugin hook that may be a function or an `{ handler }` object. */
-function call(hook: unknown, ...args: unknown[]): unknown {
-  type Hook = (...args: unknown[]) => unknown;
+function call(hook: unknown, ...args: unknown[]): void {
+  type Hook = (...args: unknown[]) => void;
   const fn =
     typeof hook === 'function'
       ? (hook as Hook)
@@ -167,7 +179,7 @@ describe('failOnLoggedWarnings', () => {
     call(plugin.config, { logLevel: 'silent' });
     call(plugin.configResolved, { build: { watch: {} }, logger: { error } });
     customLogger.warn('chunk is large');
-    await call(plugin.closeBundle);
+    await expect(call(plugin.closeBundle)).resolves.toBeUndefined();
     expect(error).toHaveBeenCalledWith(
       `[${WARNINGS_PLUGIN}] Vite warned:\nchunk is large`,
       expect.anything(),
@@ -189,32 +201,34 @@ describe('afterBuild', () => {
     }) as unknown as ResolvedConfig;
 
   it('runs the step once the bundle is written', async () => {
-    const step = jest.fn();
+    const step = jest.fn<(config: ResolvedConfig) => void>();
     const plugin = afterBuild('x', step);
-    call(plugin.configResolved, resolved({ failed: false }));
-    await call(plugin.closeBundle);
-    expect(step).toHaveBeenCalledTimes(1);
+    const config = resolved({ failed: false });
+    call(plugin.configResolved, config);
+    await expect(call(plugin.closeBundle)).resolves.toBeUndefined();
+    expect(step.mock.calls).toEqual([[config]]);
   });
 
   it("skips the step when the build's warning policy failed it", async () => {
-    const step = jest.fn();
+    const step = jest.fn<(config: ResolvedConfig) => void>();
     const plugin = afterBuild('x', step);
     call(plugin.configResolved, resolved({ failed: true }));
-    await call(plugin.closeBundle);
-    expect(step).not.toHaveBeenCalled();
+    await expect(call(plugin.closeBundle)).resolves.toBeUndefined();
+    expect(step.mock.calls).toEqual([]);
   });
 
   it('runs the step again after a failed build is followed by one that succeeds', async () => {
-    const step = jest.fn();
+    const step = jest.fn<(config: ResolvedConfig) => void>();
     const plugin = afterBuild('x', step);
-    call(plugin.configResolved, { plugins: [] });
+    const config = { plugins: [] };
+    call(plugin.configResolved, config);
     call(plugin.buildStart);
     call(plugin.buildEnd, new Error('x'));
-    await call(plugin.closeBundle);
+    await expect(call(plugin.closeBundle)).resolves.toBeUndefined();
     call(plugin.buildStart);
     call(plugin.buildEnd);
-    await call(plugin.closeBundle);
-    expect(step).toHaveBeenCalledTimes(1);
+    await expect(call(plugin.closeBundle)).resolves.toBeUndefined();
+    expect(step.mock.calls).toEqual([[config]]);
   });
 
   it('rejects with a failing step in a one-shot build', async () => {
@@ -235,37 +249,38 @@ describe('afterBuild', () => {
       logger: { error },
       plugins: [],
     });
-    await call(plugin.closeBundle);
+    await expect(call(plugin.closeBundle)).resolves.toBeUndefined();
     expect(error).toHaveBeenCalledWith('[x] TS2322', expect.anything());
   });
 
   it('skips the steps after a step that failed', async () => {
     const outcome = { failed: false };
-    const step = jest.fn();
+    const step = jest.fn<(config: ResolvedConfig) => void>();
     const first = afterBuild('first', () => {
       throw new Error('x');
     });
     const second = afterBuild('second', step);
-    for (const plugin of [first, second])
+    for (const plugin of [first, second]) {
       call(plugin.configResolved, {
         build: { watch: {} },
         logger: { error: () => {} },
         plugins: [{ name: WARNINGS_PLUGIN, api: { outcome } }],
       });
-    await call(first.closeBundle);
-    await call(second.closeBundle);
-    expect(step).not.toHaveBeenCalled();
+    }
+    await expect(call(first.closeBundle)).resolves.toBeUndefined();
+    await expect(call(second.closeBundle)).resolves.toBeUndefined();
+    expect(step.mock.calls).toEqual([]);
   });
 
   it.each([
     ['buildEnd', new Error('x')],
     ['renderError', new Error('x')],
   ])('skips the step after %s reports an error', async (hook, error) => {
-    const step = jest.fn();
+    const step = jest.fn<(config: ResolvedConfig) => void>();
     const plugin = afterBuild('x', step) as unknown as Record<string, unknown>;
     call(plugin.configResolved, { plugins: [] });
     call(plugin[hook], error);
-    await call(plugin.closeBundle);
-    expect(step).not.toHaveBeenCalled();
+    await expect(call(plugin.closeBundle)).resolves.toBeUndefined();
+    expect(step.mock.calls).toEqual([]);
   });
 });

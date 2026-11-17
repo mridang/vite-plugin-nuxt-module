@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { RolldownMagicString, type RolldownPlugin } from 'rolldown';
-import { type Plugin, transformWithOxc } from 'vite';
+import { RolldownMagicString } from 'rolldown';
+import { transformWithOxc } from 'vite';
 
 import {
   NUXT_RUNTIME_DIR,
@@ -25,17 +25,19 @@ import {
   rewriteImports,
   runtimeOutName,
   SASS_RE,
-  type SpecifierScope,
   sourceFileOf,
   specifierEdits,
 } from './specifiers.js';
 import { optionalTsconfig } from './nuxt-tsconfig.js';
 import { transformSfc } from './vue-sfc.js';
+import type { SpecifierScope } from './specifiers.js';
+import type { Plugin } from 'vite';
+import type { RolldownPlugin } from 'rolldown';
 
-const RELATIVE_SPECIFIER_PATTERN = /^\.\.?\//;
-const RELATIVE_OR_ROOT_SPECIFIER_PATTERN = /^\.\.?(\/|$)/;
-const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/;
-const SOURCE_MODULE_PATTERN = /\.(?:[cm]?tsx?|jsx)$/;
+const RELATIVE_SPECIFIER_PATTERN = /^\.\.?\//u;
+const RELATIVE_OR_ROOT_SPECIFIER_PATTERN = /^\.\.?(\/|$)/u;
+const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/u;
+const SOURCE_MODULE_PATTERN = /\.(?:[cm]?tsx?|jsx)$/u;
 
 /**
  * The module's runtime directory (absolute): the one given, which must exist, else `src/runtime`
@@ -45,11 +47,16 @@ export async function moduleRuntimeDir(
   root: string,
   runtimeDir: string | false | undefined,
 ): Promise<string | undefined> {
-  if (runtimeDir === false) return undefined;
+  if (runtimeDir === false) {
+    return undefined;
+  }
   const dir = path.resolve(root, runtimeDir ?? NUXT_RUNTIME_DIR);
-  if (await exists(dir)) return dir;
-  if (runtimeDir !== undefined)
+  if (await exists(dir)) {
+    return dir;
+  }
+  if (runtimeDir !== undefined) {
     throw new Error(`nuxtModule: runtime directory ${runtimeDir} not found`);
+  }
   return undefined;
 }
 
@@ -60,7 +67,7 @@ const RUNTIME_EXCLUDE: readonly string[] = [
 ];
 
 /** A script the runtime transpiles (and declares). */
-const SCRIPT_RE = /\.(?:[cm]?[jt]s|[jt]sx)$/;
+const SCRIPT_RE = /\.(?:[cm]?[jt]s|[jt]sx)$/u;
 
 /** What the per-file runtime build needs to know. */
 export interface RuntimeOptions {
@@ -120,9 +127,13 @@ async function runtimeSource(
   id: string,
   importer: string,
 ): Promise<string | undefined> {
-  if (!RELATIVE_SPECIFIER_PATTERN.test(id)) return undefined;
+  if (!RELATIVE_SPECIFIER_PATTERN.test(id)) {
+    return undefined;
+  }
   const target = path.resolve(path.dirname(importer), id);
-  if (!target.startsWith(runtimeDir + path.sep)) return undefined;
+  if (!target.startsWith(runtimeDir + path.sep)) {
+    return undefined;
+  }
   return sourceFileOf(target);
 }
 
@@ -135,13 +146,17 @@ export async function renderRuntimeSpecifiers(
   code: string,
   fileName: string,
 ): Promise<{ code: string; map: string } | null> {
-  if (!code.includes(RUNTIME_SPECIFIER)) return null;
+  if (!code.includes(RUNTIME_SPECIFIER)) {
+    return null;
+  }
   const lang = DECLARATION_RE.test(fileName) ? 'dts' : 'js';
   const edits = await specifierEdits(
     code,
     lang,
     (specifier): string | undefined => {
-      if (!specifier.startsWith(RUNTIME_SPECIFIER)) return undefined;
+      if (!specifier.startsWith(RUNTIME_SPECIFIER)) {
+        return undefined;
+      }
       const file = specifier.slice(RUNTIME_SPECIFIER.length);
       const specifierPath = path.posix.relative(
         path.posix.dirname(fileName),
@@ -153,7 +168,10 @@ export async function renderRuntimeSpecifiers(
     },
   );
   const s = new RolldownMagicString(code);
-  for (const edit of edits) s.overwrite(edit.start, edit.end, edit.text);
+  // eslint-disable-next-line functional/no-loop-statements -- each edit is applied to the magic string for its side effect
+  for (const edit of edits) {
+    s.overwrite(edit.start, edit.end, edit.text);
+  }
   return { code: s.toString(), map: s.generateMap({ hires: true }).toString() };
 }
 
@@ -169,7 +187,9 @@ export async function renderRuntimeSpecifiers(
 function runtimeImports(runtimeDir: string) {
   return {
     async resolveId(id: string, importer?: string) {
-      if (id.startsWith(RUNTIME_SPECIFIER)) return { id, external: true };
+      if (id.startsWith(RUNTIME_SPECIFIER)) {
+        return { id, external: true };
+      }
       const file = importer && (await runtimeSource(runtimeDir, id, importer));
       return file
         ? { id: runtimeSpecifier(runtimeDir, file), external: true }
@@ -199,13 +219,18 @@ export function nuxtRuntimeExternals(
     enforce: 'pre',
     async resolveId(id, importer, opts) {
       const dir = runtimeDir();
-      if (!dir) return null;
-      if (id.startsWith(RUNTIME_SPECIFIER)) return { id, external: true };
+      if (!dir) {
+        return null;
+      }
+      if (id.startsWith(RUNTIME_SPECIFIER)) {
+        return { id, external: true };
+      }
       if (
         !importer ||
         (!RELATIVE_SPECIFIER_PATTERN.test(id) && !id.startsWith(dir))
-      )
+      ) {
         return null;
+      }
       // eslint-disable-next-line unicorn/no-this-outside-of-class -- a rollup plugin hook receives its plugin context as this
       const resolved = await this.resolve(id, importer, {
         ...opts,
@@ -215,8 +240,9 @@ export function nuxtRuntimeExternals(
         !resolved ||
         resolved.external ||
         !resolved.id.startsWith(dir + path.sep)
-      )
+      ) {
         return null;
+      }
       return { id: runtimeSpecifier(dir, resolved.id), external: true };
     },
     renderChunk: renderRuntimeImports,
@@ -259,15 +285,17 @@ export function declarationRuntimeExternals(
         !RELATIVE_OR_ROOT_SPECIFIER_PATTERN.test(id) &&
         !id.startsWith('/') &&
         !id.startsWith('\0');
-      if (importer && isBare && !id.startsWith(RUNTIME_SPECIFIER))
+      if (importer && isBare && !id.startsWith(RUNTIME_SPECIFIER)) {
         return { id, external: true };
+      }
       return imports.resolveId(id, importer);
     },
     transform: {
       order: 'pre',
       async handler(code: string, id: string) {
-        if (!DECLARATION_FILE_PATTERN.test(id) || !code.includes('import('))
+        if (!DECLARATION_FILE_PATTERN.test(id) || !code.includes('import(')) {
           return null;
+        }
         // The declaration of `src/x.ts` is the module `src/x.d.ts`: its import types are relative to it.
         const next = await runtimeImportTypes(code, id, runtimeDir);
         return next === code ? null : { code: next };
@@ -291,9 +319,9 @@ export async function buildRuntime(o: RuntimeOptions): Promise<void> {
   const files = shipped.filter((f) => !isSassPartial(f));
   const scope = specifierScope(o);
   await rm(out, { recursive: true, force: true });
-  const scripts: string[] = [];
   // The module's own tsconfig (its chain checked), so oxc honours what it sets: `useDefineForClassFields`, JSX.
   const tsconfig = await optionalTsconfig(o.root, o.tsconfig, o.dts);
+  // eslint-disable-next-line functional/no-loop-statements -- the files are written one after another, in order
   for (const relativeFile of files) {
     const from = path.join(o.runtimeDir, relativeFile);
     const destination = path.join(out, runtimeOutName(relativeFile));
@@ -324,7 +352,6 @@ export async function buildRuntime(o: RuntimeOptions): Promise<void> {
           })
         : { code: source };
       await writeFile(destination, await rewriteImports(code, from, scope));
-      scripts.push(from);
     } else if (SASS_RE.test(relativeFile)) {
       await writeFile(destination, await compileSass(o.root, from, false));
     } else if (relativeFile.endsWith('.vue')) {
@@ -336,6 +363,9 @@ export async function buildRuntime(o: RuntimeOptions): Promise<void> {
       await writeFile(destination, await readFile(from));
     }
   }
+  const scripts = files
+    .filter((f) => !DECLARATION_RE.test(f) && SCRIPT_RE.test(f))
+    .map((f) => path.join(o.runtimeDir, f));
   if (o.dts) {
     await emitRuntimeDeclarations(
       { ...o, scope },

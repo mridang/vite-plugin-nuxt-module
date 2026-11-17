@@ -7,12 +7,12 @@ export type Matcher = string | RegExp;
 
 /** `text` with every regular-expression metacharacter escaped. */
 export function escapeRegExp(text: string): string {
-  return text.replaceAll(/[.*+?^${}()|[\]\\/]/g, String.raw`\$&`);
+  return text.replaceAll(/[.*+?^${}()|[\]\\/]/gu, String.raw`\$&`);
 }
 
 /** Matches a package name and every subpath of it (`lit`, `lit/decorators.js`), but not `lit-html`. */
 export function packageMatcher(name: string): RegExp {
-  return new RegExp(`^${escapeRegExp(name)}(/|$)`);
+  return new RegExp(`^${escapeRegExp(name)}(/|$)`, 'u');
 }
 
 /** Whether `id` is matched by any entry of `list`. */
@@ -36,7 +36,7 @@ export async function declaredDependencies(
  * Node builtins, with and without the `node:` prefix. They stay external: the module runs in Node.
  */
 const BUILTIN_MATCHERS: readonly Matcher[] = [
-  /^node:/,
+  /^node:/u,
   ...builtinModules.map((name) => packageMatcher(name)),
 ];
 

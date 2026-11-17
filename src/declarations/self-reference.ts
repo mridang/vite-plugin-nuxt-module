@@ -9,7 +9,7 @@ import { packageTypeScript } from '../resolve.js';
 import { absolutePaths, parsedTsconfig } from '../tsconfig.js';
 import { walk } from '../walk.js';
 
-const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/;
+const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/u;
 
 /** What {@link selfReferenceOptions} adds to the declaration step's options. */
 export interface SelfReferenceOptions {
@@ -22,16 +22,20 @@ const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts'];
 
 /** The `types` target of an exports-map entry: a `.d.ts` string, or the first `types` condition found. */
 export function typesTarget(entry: unknown): string | undefined {
-  if (typeof entry === 'string')
+  if (typeof entry === 'string') {
     return DECLARATION_FILE_PATTERN.test(entry) ? entry : undefined;
-  if (!entry || typeof entry !== 'object') return undefined;
-  const conditions = entry as Record<string, unknown>;
-  if (typeof conditions.types === 'string') return conditions.types;
-  for (const nested of Object.values(conditions)) {
-    const found = typesTarget(nested);
-    if (found) return found;
   }
-  return undefined;
+  if (!entry || typeof entry !== 'object') {
+    return undefined;
+  }
+  const conditions = entry as Record<string, unknown>;
+  if (typeof conditions.types === 'string') {
+    return conditions.types;
+  }
+  return Object.values(conditions)
+    .values()
+    .map((nested) => typesTarget(nested))
+    .find(Boolean);
 }
 
 /** Whether a source file under `entryRoot` names package `name` (`"name"` or `"name/…"`). */
@@ -39,7 +43,9 @@ async function importsItself(
   entryRoot: string,
   name: string,
 ): Promise<boolean> {
-  if (!(await exists(entryRoot))) return false;
+  if (!(await exists(entryRoot))) {
+    return false;
+  }
   const files = await walk(entryRoot);
   const texts = await Promise.all(
     files.map(async (file) => readFile(path.join(entryRoot, file), 'utf8')),
@@ -69,8 +75,12 @@ export async function selfReferenceOptions(
   entries: Readonly<Record<string, string>> = {},
 ): Promise<SelfReferenceOptions> {
   const pkg = await readPackageJson(root);
-  if (!pkg.name || !pkg.exports || typeof pkg.exports !== 'object') return {};
-  if (!(await importsItself(entryRoot, pkg.name))) return {};
+  if (!pkg.name || !pkg.exports || typeof pkg.exports !== 'object') {
+    return {};
+  }
+  if (!(await importsItself(entryRoot, pkg.name))) {
+    return {};
+  }
   const map = Object.keys(pkg.exports).some((k) => k.startsWith('.'))
     ? (pkg.exports as Record<string, unknown>)
     : { '.': pkg.exports };
@@ -81,8 +91,9 @@ export async function selfReferenceOptions(
         const relativeTypes = types
           ? path.relative(dtsOutDir, path.resolve(root, types))
           : '..';
-        if (!types || sub.includes('*') || relativeTypes.startsWith('..'))
+        if (!types || sub.includes('*') || relativeTypes.startsWith('..')) {
           return undefined;
+        }
         const name = posixPath(
           relativeTypes.replace(DECLARATION_FILE_PATTERN, ''),
         );
@@ -99,16 +110,24 @@ export async function selfReferenceOptions(
       },
     ),
   );
-  const paths: Record<string, string[]> = {};
-  for (const entry of found) {
-    if (!entry) continue;
-    const [sub, source] = entry;
-    paths[sub === '.' ? pkg.name : `${pkg.name}${sub.slice(1)}`] = [source];
+  const packageName = pkg.name;
+  const paths = Object.fromEntries(
+    found.flatMap((entry): [string, string[]][] => {
+      if (!entry) {
+        return [];
+      }
+      const [sub, source] = entry;
+      return [
+        [sub === '.' ? packageName : `${packageName}${sub.slice(1)}`, [source]],
+      ];
+    }),
+  );
+  if (Object.keys(paths).length === 0) {
+    return {};
   }
-  if (Object.keys(paths).length === 0) return {};
   // `compilerOptions` replaces the tsconfig's `paths` wholesale: carry those over, made absolute.
   const names = Object.keys(paths).map(
-    (n) => new RegExp(`^${escapeRegExp(n)}$`),
+    (n) => new RegExp(`^${escapeRegExp(n)}$`, 'u'),
   );
   const own = (await exists(tsconfig))
     ? absolutePaths(

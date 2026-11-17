@@ -8,28 +8,28 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import nodePath from 'node:path';
-import type { Logger, Plugin, UserConfig } from 'vite';
 import { describe, expect, it } from '@jest/globals';
 
+import { nuxtModule } from '../src/index.js';
+import { buildConfig } from '../src/plugin.js';
+import { resolveOptions } from '../src/options.js';
 import {
   buildFixture,
   FIXTURE_TSCONFIG,
   fixture,
   output,
 } from './utils/fixture.js';
-import { nuxtModule } from '../src/index.js';
-import { buildConfig } from '../src/plugin.js';
-import { resolveOptions } from '../src/options.js';
 import { pathExists } from './utils/fs.js';
+import type { ConfigEnv, Logger, Plugin, UserConfig } from 'vite';
 
 const collator = new Intl.Collator();
 
-const PREPARE_TRUE_PATTERN = /prepare: true/;
-const LATE_WARNING_PATTERN = /late warning/;
-const HELPER_IMPORT_PATTERN = /["']\.\.\/lib\/helper\.js["']/;
+const PREPARE_TRUE_PATTERN = /prepare: true/u;
+const LATE_WARNING_PATTERN = /late warning/u;
+const HELPER_IMPORT_PATTERN = /["']\.\.\/lib\/helper\.js["']/u;
 const USE_THING_IMPORT_PATTERN =
-  /from ["']\.\/runtime\/composables\/useThing\.js["']/;
-const TYPE_ERROR_PATTERN = /type error/;
+  /from ["']\.\/runtime\/composables\/useThing\.js["']/u;
+const TYPE_ERROR_PATTERN = /type error/u;
 
 /** A fake `@nuxt/cli` whose prepare writes the `.nuxt/tsconfig.json` a real one would. */
 const fakeNuxtCli = {
@@ -48,7 +48,7 @@ const fakeNuxtCli = {
   ].join('\n'),
 };
 
-const DEFAULT_FILES: Record<string, string> = { 'src/module.ts': '' };
+const DEFAULT_FILES = { 'src/module.ts': '' };
 
 /** A module package: `src/module.ts` and an empty `src/runtime` unless `files` says otherwise. */
 async function packageRoot(
@@ -68,8 +68,9 @@ async function packageRoot(
     });
     await writeFile(nodePath.join(root, path), content);
   }
-  if ('src/module.ts' in files)
+  if ('src/module.ts' in files) {
     await mkdir(nodePath.join(root, 'src/runtime'), { recursive: true });
+  }
   return root;
 }
 
@@ -84,7 +85,7 @@ async function configFor(
   )!;
   const hook = plugin.config as (
     c: UserConfig,
-    env: object,
+    env: ConfigEnv,
   ) => Promise<UserConfig>;
   return hook({ root, ...user }, { command: 'build', mode: 'production' });
 }

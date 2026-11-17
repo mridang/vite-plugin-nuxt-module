@@ -48,6 +48,7 @@ describe('vueTools', () => {
   });
 
   it('is undefined without vue-tsc', async () => {
+    // eslint-disable-next-line tslop/no-module-mocking -- vue-tsc is installed here, so only the module resolver can make it missing
     jest.unstable_mockModule('node:module', () => ({
       createRequire: () => ({
         resolve: () => {
@@ -68,6 +69,7 @@ describe('requiredVueTools', () => {
   });
 
   it('names what to install when vue-tsc is not', async () => {
+    // eslint-disable-next-line tslop/no-module-mocking -- vue-tsc is installed here, so only the module resolver can make it missing
     jest.unstable_mockModule('node:module', () => ({
       createRequire: () => ({
         resolve: () => {

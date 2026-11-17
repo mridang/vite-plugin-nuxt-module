@@ -10,7 +10,7 @@ import '../utils/realm.js';
 
 import { FIXTURES, PACKAGE_ROOT } from './paths.js';
 
-const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/;
+const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/u;
 
 /** The name the fixture module is published and installed under. */
 export const MODULE_NAME = 'hello-timing';
@@ -89,7 +89,9 @@ export async function packModule(
   await run('npm', ['pack', '--pack-destination', into], { cwd: packageDir });
   const entries = await readdir(into);
   const tarball = entries.find((file) => file.endsWith('.tgz'));
-  if (!tarball) throw new Error(`npm pack wrote no tarball into ${into}`);
+  if (!tarball) {
+    throw new Error(`npm pack wrote no tarball into ${into}`);
+  }
   return path.join(into, tarball);
 }
 
@@ -141,7 +143,9 @@ export function typeErrors(appDir: string, file: string): string[] {
     { noEmit: true },
     { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => undefined },
   );
-  if (!parsed) throw new Error(`cannot read ${tsconfig}`);
+  if (!parsed) {
+    throw new Error(`cannot read ${tsconfig}`);
+  }
   const ambient = parsed.fileNames.filter((name) =>
     DECLARATION_FILE_PATTERN.test(name),
   );
@@ -151,7 +155,9 @@ export function typeErrors(appDir: string, file: string): string[] {
     options: parsed.options,
   });
   const source = program.getSourceFile(target);
-  if (!source) throw new Error(`${target} is not part of the program`);
+  if (!source) {
+    throw new Error(`${target} is not part of the program`);
+  }
   const host: ts.FormatDiagnosticsHost = {
     getCanonicalFileName: (name) => name,
     getCurrentDirectory: () => appDir,
@@ -161,5 +167,3 @@ export function typeErrors(appDir: string, file: string): string[] {
     .getPreEmitDiagnostics(program, source)
     .map((diagnostic) => ts.formatDiagnostic(diagnostic, host).trimEnd());
 }
-
-export { PACKAGE_ROOT } from './paths.js';

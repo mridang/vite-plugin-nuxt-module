@@ -3,13 +3,13 @@ import { tmpdir } from 'node:os';
 import nodePath from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
-import { fixture } from './utils/fixture.js';
 import { packageTypeScript } from '../src/resolve.js';
 import {
   absolutePaths,
   packageTsconfig,
   parsedTsconfig,
 } from '../src/tsconfig.js';
+import { fixture } from './utils/fixture.js';
 
 describe('parsedTsconfig', () => {
   it('applies the extends chain, with overrides on top', async () => {

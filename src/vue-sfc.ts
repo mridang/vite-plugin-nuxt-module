@@ -7,7 +7,7 @@ import { packageSass } from './sass.js';
 import { importFromRoot, realPackageDirectory } from './resolve.js';
 import { SASS_RE } from './specifiers.js';
 
-const TS_MODULE_EXTENSION_PATTERN = /^\.(?:[cm]?ts|tsx)$/;
+const TS_MODULE_EXTENSION_PATTERN = /^\.(?:[cm]?ts|tsx)$/u;
 
 /**
  * Where `vue-sfc-transformer` is looked for after the module itself: the packages `nuxt-module-build`
@@ -71,7 +71,9 @@ export function sfcSnippetLoader(
       });
       return [{ contents: css, extension: '.css' }];
     }
-    if (!TS_MODULE_EXTENSION_PATTERN.test(file.extension)) return [];
+    if (!TS_MODULE_EXTENSION_PATTERN.test(file.extension)) {
+      return [];
+    }
     const { code } = await transformWithOxc(
       await file.getContents(),
       `snippet${file.extension}`,
@@ -115,24 +117,28 @@ const vueLoaderCache = new Map<string, Promise<VueLoader>>();
  * with `.vue` files needs it: shipped with their TypeScript, the consuming app's template compiler rejects them.
  */
 export async function vueTransformer(root: string): Promise<VueLoader> {
-  let loader = vueLoaderCache.get(root);
-  if (!loader) {
-    loader = (async () => {
-      const errors: string[] = [];
-      for (const base of await dependencyChain(root, SFC_TRANSFORMER_CHAIN)) {
-        try {
-          return await importFromRoot<VueLoader>(SFC_TRANSFORMER, base);
-        } catch (error) {
-          // not resolvable from this package: try the next one down the chain
-          errors.push(String(error));
-        }
-      }
-      throw new Error(
-        `nuxtModule: the runtime has .vue files; install vue-sfc-transformer to strip their TypeScript (${errors.join('; ')})`,
-      );
-    })();
-    vueLoaderCache.set(root, loader);
+  const cached = vueLoaderCache.get(root);
+  if (cached) {
+    return cached;
   }
+  const loader = (async () => {
+    const errors: string[] = [];
+    // eslint-disable-next-line functional/no-loop-statements -- each package is tried in turn, in order, until one imports
+    for (const base of await dependencyChain(root, SFC_TRANSFORMER_CHAIN)) {
+      try {
+        return await importFromRoot<VueLoader>(SFC_TRANSFORMER, base);
+      } catch (error) {
+        // not resolvable from this package: try the next one down the chain
+        // eslint-disable-next-line functional/immutable-data -- collects the failures to report if none imports
+        errors.push(String(error));
+      }
+    }
+    throw new Error(
+      `nuxtModule: the runtime has .vue files; install vue-sfc-transformer to strip their TypeScript (${errors.join('; ')})`,
+    );
+  })();
+  // eslint-disable-next-line functional/immutable-data -- the module-level cache keeps one loader per root
+  vueLoaderCache.set(root, loader);
   return loader;
 }
 
@@ -153,7 +159,8 @@ export async function transformSfc(
       },
       { options: { esbuild: {} }, loadFile: sfcSnippetLoader(root) },
     )) ?? [];
-  if (!sfc)
+  if (!sfc) {
     throw new Error(`vue-sfc-transformer returned nothing for ${relativeFile}`);
+  }
   return sfc.contents;
 }

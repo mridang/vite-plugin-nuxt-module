@@ -7,8 +7,8 @@ import { KIT_API } from './contract/kit-api.js';
 
 const collator = new Intl.Collator();
 
-const KIT_IMPORT_PATTERN = /import\s*\{([^}]*)\}\s*from\s*["']@nuxt\/kit["']/;
-const NON_EMPTY_PATTERN = /\S{3,}/;
+const KIT_IMPORT_PATTERN = /import\s*\{([^}]*)\}\s*from\s*["']@nuxt\/kit["']/u;
+const NON_EMPTY_PATTERN = /\S{3,}/u;
 
 /** The names the fixture module imports from `@nuxt/kit`. */
 async function importedFromKit(): Promise<string[]> {

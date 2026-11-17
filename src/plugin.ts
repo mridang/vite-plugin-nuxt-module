@@ -1,16 +1,11 @@
 import path from 'node:path';
-import type { Plugin, UserConfig } from 'vite';
 
 import { NODE_TARGET, OUT_DIR, PLUGIN_PREFIX } from './defaults.js';
 import { exists } from './exists.js';
 import { implicitDependencies } from './implicit-dependencies.js';
 import { noBuildPaths } from './no-build-paths.js';
 import { optionalTsconfig } from './nuxt-tsconfig.js';
-import {
-  type NuxtModuleOptions,
-  type ResolvedOptions,
-  resolveOptions,
-} from './options.js';
+import { resolveOptions } from './options.js';
 import {
   nuxtModuleOutputs,
   nuxtRuntime,
@@ -19,11 +14,10 @@ import {
 import { prepareModule } from './prepare.js';
 import { nuxtRuntimeExternals } from './runtime.js';
 import { packageTsconfig } from './tsconfig.js';
-import {
-  type BuildOutcome,
-  failOnLoggedWarnings,
-  failOnWarnings,
-} from './warnings.js';
+import { failOnLoggedWarnings, failOnWarnings } from './warnings.js';
+import type { NuxtModuleOptions, ResolvedOptions } from './options.js';
+import type { BuildOutcome } from './warnings.js';
+import type { Plugin, UserConfig } from 'vite';
 
 /**
  * The Vite build of a Nuxt module, as a set of plugins that read the project's own Vite config
@@ -47,10 +41,12 @@ import {
  * to `vite build` only.
  */
 export function nuxtModule(options: NuxtModuleOptions = {}): Plugin[] {
+  // eslint-disable-next-line functional/no-let -- set by the configResolved hook, read by the others
   let resolved: ResolvedOptions | undefined;
   const current = (): ResolvedOptions => {
-    if (!resolved)
+    if (!resolved) {
       throw new Error('nuxtModule: used before Vite resolved its config');
+    }
     return resolved;
   };
   const outcome: BuildOutcome = { failed: false };
@@ -64,7 +60,9 @@ export function nuxtModule(options: NuxtModuleOptions = {}): Plugin[] {
       const root = path.resolve(user.root ?? process.cwd());
       const o = await resolveOptions(options, root, user);
       resolved = o;
-      if (o.prepare) await prepareModule(root, o.entry.module ?? '');
+      if (o.prepare) {
+        await prepareModule(root, o.entry.module ?? '');
+      }
       // A module's tsconfig usually extends `.nuxt/tsconfig.json`, which only a prepare writes.
       await optionalTsconfig(root, o.tsconfig, o.dts || o.prepare);
       return buildConfig(o, user, logged.customLogger, outcome);

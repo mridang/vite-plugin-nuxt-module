@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import nodePath from 'node:path';
 import ts from 'typescript';
-import { describe, expect, it } from '@jest/globals';
+import { describe, expect, it, jest } from '@jest/globals';
 
 import {
   anyTypeScript,
@@ -14,7 +14,7 @@ import {
   resolveFromRoot,
 } from '../src/resolve.js';
 
-const MISSING_TOOL_PATTERN = /cannot find package missing-tool/;
+const MISSING_TOOL_PATTERN = /cannot find package missing-tool/u;
 
 async function tree(files: Record<string, string>): Promise<string> {
   const root = await mkdtemp(nodePath.join(tmpdir(), 'vite-resolve-'));
@@ -183,15 +183,17 @@ describe('packageDirectory', () => {
       'node_modules/up-tool/package.json': '{}',
       'pkg/package.json': '{}',
     });
-    const previous = process.env.NODE_PATH;
-    process.env.NODE_PATH = nodePath.join(root, 'elsewhere');
+    const replaced = jest.replaceProperty(process, 'env', {
+      ...process.env,
+      NODE_PATH: nodePath.join(root, 'elsewhere'),
+    });
     try {
       expect([
         await packageDirectory('up-tool', nodePath.join(root, 'pkg')),
         await packageDirectory('missing-tool', nodePath.join(root, 'pkg')),
       ]).toEqual([nodePath.join(root, 'node_modules/up-tool'), undefined]);
     } finally {
-      process.env.NODE_PATH = previous;
+      replaced.restore();
     }
   });
 });

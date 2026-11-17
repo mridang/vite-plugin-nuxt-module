@@ -10,12 +10,12 @@ import { tmpdir } from 'node:os';
 import nodePath from 'node:path';
 import { afterEach, describe, expect, it } from '@jest/globals';
 
-import { buildFixture } from './utils/fixture.js';
 import { IMPLICIT_DEPENDENCY } from '../src/defaults.js';
 import { nodeModulesPackage } from '../src/implicit-dependencies.js';
+import { buildFixture } from './utils/fixture.js';
 import type { NuxtModuleOptions } from '../src/options.js';
 
-const IMPLICIT_HELPER_PATTERN = /Implicitly bundling "helper"/;
+const IMPLICIT_HELPER_PATTERN = /Implicitly bundling "helper"/u;
 
 const directories: string[] = [];
 async function tree(files: Record<string, string>): Promise<string> {
@@ -32,8 +32,9 @@ async function tree(files: Record<string, string>): Promise<string> {
   return root;
 }
 afterEach(async () => {
-  for (const d of directories.splice(0))
+  for (const d of directories.splice(0)) {
     await rm(d, { recursive: true, force: true });
+  }
 });
 
 /** A module importing `helper`, a package it lists only under `devDependencies`. */

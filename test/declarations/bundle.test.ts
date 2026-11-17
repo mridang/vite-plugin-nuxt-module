@@ -3,7 +3,6 @@ import path from 'node:path';
 import { describe, expect, it } from '@jest/globals';
 
 import { FIXTURE_TSCONFIG, fixture, output } from '../utils/fixture.js';
-import type { RolldownPlugin } from 'rolldown';
 
 import {
   ASSET_IMPORT,
@@ -13,17 +12,18 @@ import {
   STRING_ASSET_IMPORT,
 } from '../../src/declarations/bundle.js';
 import { pathExists } from '../utils/fs.js';
+import type { RolldownPlugin } from 'rolldown';
 
-const TYPE_ERROR_TS2322_PATTERN = /1 type error\(s\)[\s\S]*TS2322/;
-const DEP_PATTERN = /^dep/;
-const MISSING_NAMESPACE_PATTERN = /TS2503: Cannot find namespace/;
+const TYPE_ERROR_TS2322_PATTERN = /1 type error\(s\)[\s\S]*TS2322/u;
+const DEP_PATTERN = /^dep/u;
+const MISSING_NAMESPACE_PATTERN = /TS2503: Cannot find namespace/u;
 const TEMPLATE_LIQUID_STRING_PATTERN =
-  /^(?![\s\S]*from ["']\.\/template\.liquid)[\s\S]*: string/;
-const DEP_TYPE_EXPORT_PATTERN = /^export type \* from "dep";$/m;
-const FX_PATTERN = /^fx($|\/)/;
+  /^(?![\s\S]*from ["']\.\/template\.liquid)[\s\S]*: string/u;
+const DEP_TYPE_EXPORT_PATTERN = /^export type \* from "dep";$/mu;
+const FX_PATTERN = /^fx($|\/)/u;
 const STYLES_CONST_PATTERN =
-  /const (\w+): \{\s*readonly \[key: string\]: string;?\s*\};[\s\S]*\1 as styles/;
-const OWN_CODE_PATTERN = /OWN_CODE: careful/;
+  /const (\w+): \{\s*readonly \[key: string\]: string;?\s*\};[\s\S]*\1 as styles/u;
+const OWN_CODE_PATTERN = /OWN_CODE: careful/u;
 
 /** Writes the bundled declarations of `src/index.ts` of a fixture into its `dist`. */
 const emit = async (
@@ -276,6 +276,7 @@ describe('ASSET_IMPORT as rebuilt from its parts', () => {
       String.raw`\.(css|liquid|svg|png|jpe?g|gif|webp|woff2?)$`,
       String.raw`\.module\.(css|scss|sass|less|styl|stylus|pcss|postcss|sss)$`,
     ].join('|'),
+    'u',
   );
 
   it.each([
@@ -294,7 +295,7 @@ describe('ASSET_IMPORT as rebuilt from its parts', () => {
   it('matches the old pattern on seeded random specifiers', () => {
     let state = 13;
     const random = (): number => {
-      state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0;
+      state = (Math.imul(state, 1_664_525) + 1_013_904_223 + 2 ** 32) % 2 ** 32;
       return state / 2 ** 32;
     };
     const pieces = [

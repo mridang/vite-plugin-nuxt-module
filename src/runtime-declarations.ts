@@ -1,6 +1,5 @@
 import { access, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type TS from 'typescript';
 
 import { searchForWorkspaceRoot } from 'vite';
 
@@ -13,15 +12,16 @@ import { parsedTsconfig } from './tsconfig.js';
 import {
   applyEdits,
   rewriteDeclarationImports,
-  type SpecifierScope,
   specifierEdits,
 } from './specifiers.js';
 import { effectiveTsconfig } from './nuxt-tsconfig.js';
+import type { SpecifierScope } from './specifiers.js';
+import type TS from 'typescript';
 
-const SCRIPT_EXTENSION_PATTERN = /\.([mc])?[jt]sx?$/;
-const NUXT_APP_SPECIFIER_PATTERN = /^#app(\/|$)/;
-const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/;
-const VUE_DECLARATION_SUFFIX_PATTERN = /\.vue\.d\.ts$/;
+const SCRIPT_EXTENSION_PATTERN = /\.([mc])?[jt]sx?$/u;
+const NUXT_APP_SPECIFIER_PATTERN = /^#app(\/|$)/u;
+const DECLARATION_FILE_PATTERN = /\.d\.[cm]?ts$/u;
+const VUE_DECLARATION_SUFFIX_PATTERN = /\.vue\.d\.ts$/u;
 
 const exists = async (file: string): Promise<boolean> =>
   access(file)
@@ -39,7 +39,9 @@ export interface RuntimeDeclarationsOptions {
 
 /** Where a source file's declaration is written by TypeScript (no `outDir`): next to it. */
 export function declarationFileOf(file: string): string {
-  if (file.endsWith('.vue')) return `${file}.d.ts`;
+  if (file.endsWith('.vue')) {
+    return `${file}.d.ts`;
+  }
   return file.replace(SCRIPT_EXTENSION_PATTERN, '.d.$1ts');
 }
 
@@ -64,15 +66,21 @@ export async function rewriteRuntimeTypeAliases(code: string): Promise<string> {
 export function declarationCompilerOptions(
   options: TS.CompilerOptions,
 ): TS.CompilerOptions {
-  const own: TS.CompilerOptions = { ...options };
   // Dropped from `own`: the options that place files on disk, which an in-memory emit must not inherit.
-  delete own.outDir;
-  delete own.declarationDir;
-  delete own.rootDir;
-  delete own.outFile;
-  delete own.composite;
-  delete own.incremental;
-  delete own.tsBuildInfoFile;
+  const own = Object.fromEntries(
+    Object.entries(options).filter(
+      ([key]) =>
+        ![
+          'outDir',
+          'declarationDir',
+          'rootDir',
+          'outFile',
+          'composite',
+          'incremental',
+          'tsBuildInfoFile',
+        ].includes(key),
+    ),
+  ) as TS.CompilerOptions;
   return {
     skipLibCheck: true,
     strictNullChecks: true,
@@ -128,7 +136,9 @@ export async function emitRuntimeDeclarations(
     );
     const host = ts.createCompilerHost(options);
     const written = new Map<string, string>();
+    // eslint-disable-next-line functional/immutable-data -- the compiler host's writeFile is replaced to keep the emit in memory
     host.writeFile = (name, text) => {
+      // eslint-disable-next-line functional/immutable-data -- collects what the compiler emits
       written.set(path.resolve(name), text);
     };
     const createProgram = vue ? vue.createProgram(tsconfig) : ts.createProgram;
@@ -145,30 +155,36 @@ export async function emitRuntimeDeclarations(
             .filter((d) => UNRESOLVED_MODULE_CODES.has(d.code))
         : [];
     });
-    if (unresolved.length > 0)
+    if (unresolved.length > 0) {
       throw new Error(
         `nuxtModule: the runtime imports modules TypeScript cannot resolve, whose types its declarations would lose:\n${ts.formatDiagnostics(unresolved, host)}Run \`nuxi prepare\` (or set \`prepare: true\`) with a tsconfig that extends .nuxt/tsconfig.json, or declare them in the tsconfig's files.`,
       );
+    }
     const result = program.emit();
     const own = new Set(inputs);
     const shipped: [string, string][] = [];
     const failures = result.diagnostics.filter(
       (d) => d.file && own.has(path.resolve(d.file.fileName)),
     );
-    if (failures.length > 0)
+    if (failures.length > 0) {
       throw new Error(
         `nuxtModule: cannot emit declarations for the runtime:\n${ts.formatDiagnostics(failures, host)}`,
       );
+    }
+    // eslint-disable-next-line functional/no-loop-statements -- the files are written one after another, in order
     for (const input of inputs) {
       // A declaration written by hand next to its source (`plain.js` + `plain.d.ts`) is shipped as written.
-      if (await exists(declarationFileOf(input))) continue;
+      if (await exists(declarationFileOf(input))) {
+        continue;
+      }
       const relativePath = path.relative(
         o.runtimeDir,
         declarationFileOf(input),
       );
       const text = written.get(declarationFileOf(input));
-      if (text === undefined)
+      if (text === undefined) {
         throw new Error(`nuxtModule: no declaration was emitted for ${input}`);
+      }
       const destination = path.join(out, relativePath);
       await mkdir(path.dirname(destination), { recursive: true });
       const code = await rewriteRuntimeTypeAliases(
@@ -179,9 +195,10 @@ export async function emitRuntimeDeclarations(
         ),
       );
       await writeFile(destination, code);
+      // eslint-disable-next-line functional/immutable-data -- collects what this loop writes
       shipped.push([destination, code]);
       // vue-tsc names these `X.vue.d.ts`; newer TS tooling also looks for `X.d.vue.ts`.
-      if (relativePath.endsWith('.vue.d.ts'))
+      if (relativePath.endsWith('.vue.d.ts')) {
         await writeFile(
           path.join(
             out,
@@ -189,6 +206,7 @@ export async function emitRuntimeDeclarations(
           ),
           code,
         );
+      }
     }
     assertNoBuildPaths(shipped, posixPath(searchForWorkspaceRoot(o.root)));
   }

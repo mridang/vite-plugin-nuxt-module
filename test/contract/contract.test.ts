@@ -14,24 +14,24 @@ import { publint } from 'publint';
 import { formatMessage } from 'publint/utils';
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
 
+import { pathExists } from '../utils/fs.js';
+import { PACKAGE_ROOT } from './paths.js';
 import {
   buildApp,
   buildModule,
   copyFixture,
   installModule,
   MODULE_NAME,
-  PACKAGE_ROOT,
   packModule,
   prepareApp,
   run,
   typeErrors,
   workDirectory,
 } from './harness.js';
-import { pathExists } from '../utils/fs.js';
 
-const NUXT_VERSION_PAGE_PATTERN = /data-test="nuxt">4\.\d+\.\d+\|true\|1</;
-const GREETINGS_PATTERN = /data-test="greetings">([^<]*)</;
-const SERVER_TIMING_PATTERN = /^hello;dur=\d+\.\d$/;
+const NUXT_VERSION_PAGE_PATTERN = /data-test="nuxt">4\.\d+\.\d+\|true\|1</u;
+const GREETINGS_PATTERN = /data-test="greetings">([^<]*)</u;
+const SERVER_TIMING_PATTERN = /^hello;dur=\d+\.\d$/u;
 
 const work = workDirectory();
 const moduleDir = path.join(work, 'module');
@@ -55,8 +55,9 @@ beforeAll(async () => {
   await buildApp(appDir);
 }, 600_000);
 afterAll(async () => {
-  if (!process.env.KEEP_CONTRACT_WORKDIR)
+  if (!process.env.KEEP_CONTRACT_WORKDIR) {
     await rm(work, { recursive: true, force: true });
+  }
 });
 
 await setup({
@@ -155,7 +156,7 @@ describe('the module in a Nuxt app', () => {
   it('links the stylesheets the plugin compiled from Sass', async () => {
     const html = await $fetch<string>('/');
     const hrefs = Array.from(
-      html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g),
+      html.matchAll(/<link rel="stylesheet" href="([^"]+)"/gu),
       (m) => m[1],
     );
     const pages = await Promise.all(

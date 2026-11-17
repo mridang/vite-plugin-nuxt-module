@@ -1,13 +1,16 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { realPackageDirectory, requireFrom } from '../resolve.js';
 import type {
   CompilerOptions,
   CreateProgramOptions,
   ParseConfigHost,
 } from 'typescript';
 
-import { realPackageDirectory, requireFrom } from '../resolve.js';
 import type { TS } from '../tsconfig.js';
+
+/** A Volar language plugin, as `@vue/language-core` builds it and `@volar/typescript` consumes it. */
+type VueLanguagePlugin = Readonly<Record<string, unknown>>;
 
 /** The part of `@vue/language-core` (a `vue-tsc` dependency) a Vue program needs. */
 interface VueLanguageCore {
@@ -23,7 +26,7 @@ interface VueLanguageCore {
     options: CompilerOptions,
     vueOptions: unknown,
     asFileName: (id: string) => string,
-  ): unknown;
+  ): VueLanguagePlugin;
 }
 
 /** The part of `@volar/typescript` (a `vue-tsc` dependency) a Vue program needs. */
@@ -31,7 +34,7 @@ interface VolarTypescript {
   proxyCreateProgram(
     ts: TS,
     original: TS['createProgram'],
-    create: (ts: TS, options: CreateProgramOptions) => unknown[],
+    create: (ts: TS, options: CreateProgramOptions) => VueLanguagePlugin[],
   ): TS['createProgram'];
 }
 
@@ -49,15 +52,19 @@ export interface VueTools {
  * versions.
  */
 export async function vueTools(root: string): Promise<VueTools | undefined> {
-  let vueTscDir = await realPackageDirectory('vue-tsc', root);
+  const vueTscDir =
+    (await realPackageDirectory('vue-tsc', root)) ??
+    ((): string | undefined => {
+      try {
+        return path.dirname(
+          createRequire(import.meta.url).resolve('vue-tsc/package.json'),
+        );
+      } catch {
+        return undefined;
+      }
+    })();
   if (vueTscDir === undefined) {
-    try {
-      vueTscDir = path.dirname(
-        createRequire(import.meta.url).resolve('vue-tsc/package.json'),
-      );
-    } catch {
-      return undefined;
-    }
+    return undefined;
   }
   const fromVueTsc = requireFrom(vueTscDir);
   const ts = fromVueTsc('typescript') as TS;
@@ -89,6 +96,8 @@ export async function requiredVueTools(
   what: string,
 ): Promise<VueTools> {
   const tools = await vueTools(root);
-  if (!tools) throw new Error(`${what}; install vue-tsc`);
+  if (!tools) {
+    throw new Error(`${what}; install vue-tsc`);
+  }
   return tools;
 }
